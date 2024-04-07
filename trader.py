@@ -4,7 +4,7 @@ import collections
 import numpy as np
 
 class Trader:
-    POSITION_LIMIT = {'BANANAS': 20, 'PEARLS': 20}
+    POSITION_LIMIT = {'STARFRUIT': 20, 'AMETHYSTS': 20}
 
     def __init__(self):
         self.position = {product: 0 for product in self.POSITION_LIMIT}
@@ -66,7 +66,7 @@ class Trader:
             self.bananas_cache.pop(0)
         sell_prices, buy_prices = [], []
 
-        for product in ['BANANAS', 'PEARLS']:
+        for product in ['STARFRUIT', 'AMETHYSTS']:
             order_depth = state.order_depths[product]
             _, best_sell = self.values_extract(collections.OrderedDict(sorted(order_depth.sell_orders.items())))
             _, best_buy = self.values_extract(collections.OrderedDict(sorted(order_depth.buy_orders.items(), reverse=True)), 1)
@@ -80,10 +80,10 @@ class Trader:
 
         if len(self.bananas_cache) == self.bananas_dim:
             bananas_price = self.calc_next_price_bananas()
-            acc_bid['BANANAS'] = bananas_price - 1
-            acc_ask['BANANAS'] = bananas_price + 1
+            acc_bid['STARFRUIT'] = bananas_price - 1
+            acc_ask['STARFRUIT'] = bananas_price + 1
 
-        for product in ['BANANAS', 'PEARLS']:
+        for product in ['STARFRUIT', 'AMETHYSTS']:
             orders = self.compute_orders(product, state.order_depths[product], acc_bid[product], acc_ask[product])
             result[product] += orders
 
