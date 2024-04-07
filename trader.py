@@ -27,6 +27,7 @@ class Trader:
                         buy_amount = min(self.position_limit['AMETHYSTS'] - self.positions['AMETHYSTS'],-best_ask_amount)
                         print("BUY", str(-best_ask_amount) + "x", best_ask)
                         orders.append(Order(product,best_ask,buy_amount))
+                        self.positions['AMETHYSTS'] += buy_amount
                 
                 if len(order_depth.buy_orders) != 0:
                     best_bid, best_bid_amount = list(order_depth.buy_orders.items())[0]
@@ -34,6 +35,7 @@ class Trader:
                         sell_amount = min(self.positions['AMETHYSTS'] + self.position_limit['AMETHYSTS'], best_bid_amount)
                         print("SELL", str(sell_amount) + "x", best_bid)
                         orders.append(Order(product,best_bid,-sell_amount))
+                        self.positions['AMETHYSTS'] -= sell_amount
                 result[product] = orders
                         
                     
