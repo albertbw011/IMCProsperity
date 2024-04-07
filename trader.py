@@ -87,6 +87,10 @@ class Trader:
             orders = self.compute_orders(product, state.order_depths[product], acc_bid[product], acc_ask[product])
             result[product] += orders
 
-        return result
+        traderData = "SAMPLE" 
+        
+		# Sample conversion request. Check more details below. 
+        conversions = 1
+        return result, conversions, traderData
 
 # Note: Ensure all required objects and methods from datamodel are correctly implemented to work with this trader logic.
