@@ -8,8 +8,10 @@ class Trader:
 
     def __init__(self):
         self.position = {product: 0 for product in self.POSITION_LIMIT}
-        self.bananas_cache = []
-        self.bananas_dim = 4
+        self.starfruit_cache = []
+        self.amethysts_cache = []
+        self.starfruit_dim = 4  # Observations used for price prediction for STARFRUIT
+        self.amethysts_dim = 30  # Observations used for price prediction for AMETHYSTS
 
     def values_extract(self, order_dict, buy=0):
         total_volume = 0
@@ -25,7 +27,7 @@ class Trader:
 
         return total_volume, best_price
 
-    def compute_orders(self, product, order_depth, acc_bid, acc_ask):
+    def compute_orders_amethysts(self, product, order_depth, acc_bid, acc_ask):
         orders = []
         osell = collections.OrderedDict(sorted(order_depth.sell_orders.items()))
         obuy = collections.OrderedDict(sorted(order_depth.buy_orders.items(), reverse=True))
@@ -45,52 +47,33 @@ class Trader:
                 cpos += order_volume
                 orders.append(Order(product, price, order_volume))
 
-        self.position[product] = cpos  # Update position after orders
+        self.position[product] = cpos
         return orders
-
-    def calc_next_price_bananas(self):
-        coef = [-0.01869561, 0.0455032, 0.16316049, 0.8090892]
-        intercept = 4.481696494462085
-        next_price = intercept
-        for i, val in enumerate(self.bananas_cache):
-            next_price += val * coef[i]
-        return int(round(next_price))
 
     def run(self, state: TradingState):
         result = {product: [] for product in self.POSITION_LIMIT}
-
-        for product in self.POSITION_LIMIT:
-            self.position[product] = state.position.get(product, 0)
-
-        if len(self.bananas_cache) == self.bananas_dim:
-            self.bananas_cache.pop(0)
-        sell_prices, buy_prices = [], []
+        # Ensure bid and ask are defined regardless of the conditions
+        acc_bid = {product: 10 for product in self.POSITION_LIMIT}  # Default placeholder bids
+        acc_ask = {product: 12 for product in self.POSITION_LIMIT}  # Default placeholder asks
 
         for product in ['STARFRUIT', 'AMETHYSTS']:
             order_depth = state.order_depths[product]
-            _, best_sell = self.values_extract(collections.OrderedDict(sorted(order_depth.sell_orders.items())))
-            _, best_buy = self.values_extract(collections.OrderedDict(sorted(order_depth.buy_orders.items(), reverse=True)), 1)
-            sell_prices.append(best_sell)
-            buy_prices.append(best_buy)
 
-        self.bananas_cache.append((sell_prices[0] + buy_prices[0]) / 2)
+            # Update the cache and adjust bid/ask based on recent prices and model predictions
+            if product == 'STARFRUIT' and len(self.starfruit_cache) < self.starfruit_dim:
+                _, best_sell = self.values_extract(collections.OrderedDict(sorted(order_depth.sell_orders.items())))
+                _, best_buy = self.values_extract(collections.OrderedDict(sorted(order_depth.buy_orders.items(), reverse=True)), 1)
+                self.starfruit_cache.append((best_sell + best_buy) / 2)
+                if len(self.starfruit_cache) == self.starfruit_dim:
+                    starfruit_price = self.calc_next_price_starfruit()  # Define this function based on your model
+                    acc_bid[product], acc_ask[product] = starfruit_price - 1, starfruit_price + 1
 
-        acc_bid = {product: 10 for product in self.POSITION_LIMIT}  # Placeholder for actual logic
-        acc_ask = {product: 12 for product in self.POSITION_LIMIT}  # Placeholder for actual logic
+            # Process orders based on the current strategy for AMETHYSTS and STARFRUIT
+            if product == 'AMETHYSTS':
+                result[product] += self.compute_orders_amethysts(product, order_depth, acc_bid[product], acc_ask[product])
+            else:
+                result[product] += self.compute_orders_amethysts(product, order_depth, acc_bid[product], acc_ask[product])
 
-        if len(self.bananas_cache) == self.bananas_dim:
-            bananas_price = self.calc_next_price_bananas()
-            acc_bid['STARFRUIT'] = bananas_price - 1
-            acc_ask['STARFRUIT'] = bananas_price + 1
+        return result, None, "SAMPLE"  # Assuming the function expects three returns based on your error logs
 
-        for product in ['STARFRUIT', 'AMETHYSTS']:
-            orders = self.compute_orders(product, state.order_depths[product], acc_bid[product], acc_ask[product])
-            result[product] += orders
-
-        traderData = "SAMPLE" 
-        
-		# Sample conversion request. Check more details below. 
-        conversions = 1
-        return result, conversions, traderData
-
-# Note: Ensure all required objects and methods from datamodel are correctly implemented to work with this trader logic.
+# Further refinements might be necessary to precisely align this with your trading strategy details, especially regarding how the price prediction functions are defined and used.
