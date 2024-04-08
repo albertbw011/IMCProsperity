@@ -23,20 +23,38 @@ class Trader:
                 
                 if len(order_depth.sell_orders) != 0:
                     best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
-                    if int(best_ask) < acceptable_price and self.positions['AMETHYSTS'] < self.position_limit['AMETHYSTS']:
-                        buy_amount = min(self.position_limit['AMETHYSTS'] - self.positions['AMETHYSTS'],-best_ask_amount)
-                        print("BUY", str(-best_ask_amount) + "x", best_ask)
-                        orders.append(Order(product,best_ask,buy_amount))
-                        self.positions['AMETHYSTS'] += buy_amount
+                    if self.positions[product] < self.position_limit[product]:
+                        if int(best_ask) < acceptable_price:
+                            buy_amount = min(self.position_limit[product] - self.positions[product],-best_ask_amount)
+                            print("BUY", str(buy_amount) + "x", best_ask)
+                            orders.append(Order(product,best_ask,buy_amount))
+                            self.positions[product] += buy_amount
+                            best_ask, best_ask_amount = list(order_depth.sell_orders.items())[1]
+                        if int(best_ask) == acceptable_price and self.positions[product] < 0:
+                            buy_amount = min(-self.positions[product],-best_ask_amount)
+                            print("BUY", str(buy_amount) + "x", best_ask)
+                            orders.append(Order(product,best_ask,buy_amount))
+                            self.positions[product] += buy_amount
+                    
                 
                 if len(order_depth.buy_orders) != 0:
                     best_bid, best_bid_amount = list(order_depth.buy_orders.items())[0]
-                    if int(best_bid) > acceptable_price and self.positions['AMETHYSTS'] > -self.position_limit['AMETHYSTS']:
-                        sell_amount = min(self.positions['AMETHYSTS'] + self.position_limit['AMETHYSTS'], best_bid_amount)
-                        print("SELL", str(sell_amount) + "x", best_bid)
-                        orders.append(Order(product,best_bid,-sell_amount))
-                        self.positions['AMETHYSTS'] -= sell_amount
+                    if self.positions[product] > -self.position_limit[product]:
+                        if int(best_bid) > acceptable_price:
+                            sell_amount = min(self.positions[product] + self.position_limit[product], best_bid_amount)
+                            print("SELL", str(sell_amount) + "x", best_bid)
+                            orders.append(Order(product,best_bid,-sell_amount))
+                            self.positions[product] -= sell_amount
+                            best_bid, best_bid_amount = list(order_depth.buy_orders.items())[1]
+                        if int(best_bid) == acceptable_price and self.positions[product] > 0:
+                            sell_amount = min(self.positions[product],best_bid_amount)
+                            print("SELL", str(sell_amount) + "x", best_bid)
+                            orders.append(Order(product,best_bid,-sell_amount))
+                            self.positions[product] -= sell_amount
+                            
                 result[product] = orders
+                print('\n'+str(self.positions[product]))
+                #print(state.position[product])
                         
                     
 
