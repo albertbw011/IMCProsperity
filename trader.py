@@ -1,6 +1,8 @@
 import json
 from datamodel import Listing, Observation, Order, OrderDepth, ProsperityEncoder, Symbol, Trade, TradingState
 from typing import Any
+import pandas as pd
+import numpy as np
 
 class Logger:
     def __init__(self) -> None:
@@ -109,7 +111,57 @@ logger = Logger()
 
 class Trader:
     positions = {'AMETHYSTS': 0, 'STARFRUIT': 0}
-    position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20} 
+    position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20}
+    starfruit_prices = pd.Series()
+
+    # input: OrderDepth order_depth
+    # return: mid_price
+    # calculates mid price of all orders in an OrderDepth
+    # calculates average of all asks and bids, then returns the median of the two
+    def calculate_mid_price(self, order_depth: OrderDepth):
+        avg_bid_price = 0
+        buy_counter = 0
+        avg_ask_price = 0
+        sell_counter = 0
+
+        for value in order_depth.buy_orders.values():
+            avg_bid_price += value
+            buy_counter += 1
+
+        avg_bid_price /= buy_counter
+
+        for value in order_depth.sell_orders.values():
+            avg_ask_price += value
+            sell_counter += 1
+
+        sell_counter /= sell_counter
+
+        return (avg_ask_price + avg_bid_price) / 2
+    
+    # input: 
+    # prices: pd.Series - mid_price for each timestamp for a given product
+    # window: int - the window for the moving average
+    # return: pd.Series with appended column that has the moving average
+    # calculate moving average of a pandas series and returns a dataframe with a new column that has the new moving average
+    def calculate_moving_average(self, prices: pd.Series, window: int):
+        if len(prices) < window:
+            return None
+        else:
+            prices[f"mid_price_ma{window}"] = prices['mid_price'].rolling(window=window).mean()
+            prices.fillna(0, inplace=True)
+            return prices
+
+    def extract_features(self, state: TradingState, symbol: str):
+        trades = state.order_depths[symbol]
+        mid_price = self.calculate_mid_price(trades)
+        self.starfruit_prices.append(mid_price, inplace=True, index=state.timestamp)
+
+        if len(starfruit_prices > 10):
+            starfruit_prices = self.calculate_moving_average(starfruit_prices, 10)
+
+    def predict_prices(features: pd.DataFrame, coefficients: int, intercept: int):
+        return np.dot(features, coefficients) + intercept
+
     
     def run(self, state: TradingState) -> tuple[dict[Symbol, list[Order]], int, str]:
         result = {}
@@ -156,7 +208,12 @@ class Trader:
                 result[product] = orders
                 logger.print('\n'+str(self.positions[product]))
                 #print(state.position[product])
-                        
+
+            if product == "STARFRUIT":
+                coefficients = [1, 8.35469697e-17]
+                intercept = -2.091837814077735e-11
+
+
                     
 
                 
