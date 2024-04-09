@@ -151,6 +151,8 @@ class Trader:
             prices.fillna(0, inplace=True)
             return prices
 
+    # so far
+    # extracts features for starfruit for linear regression
     def extract_features(self, state: TradingState, symbol: str):
         trades = state.order_depths[symbol]
         mid_price = self.calculate_mid_price(trades)
@@ -167,6 +169,34 @@ class Trader:
         result = {}
         
         for product in state.order_depths:
+
+            if product == "STARFRUIT":
+                coefficients = [1, 8.35469697e-17]
+                intercept = -2.091837814077735e-11
+                threshold = 5
+
+                predicted_price = self.predict_prices(self.starfruit_prices, coefficients, intercept)
+                acceptable_price_range = [predicted_price-threshold, predicted_price+threshold]
+
+                if len(order_depth.sell_orders) != 0:
+                    best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
+                    if self.positions[product] < self.position_limit[product]:
+                        if best_ask < acceptable_price[1]:
+                            buy_amount = min(self.position_limit[product] - self.positions[product], -best_ask_amount)
+                            logger.print("BUY", str(buy_amount) + "x", best_ask)
+                            orders.append(Order(product, best_ask, best_ask_amount))
+                            self.positions[product] += buy_amount
+                            best_ask, best_ask_amount = list(order_depth.sell_orders.items())[1]
+
+                if len(order_depth.buy_orders) != 0:
+                    best_bid, best_bid_amount = list(order_depth.buy_orders.items())[0]
+                    if best_bid > acceptable_price_range[0] and self.positions[product] > -self.position_limit[product]:
+                        sell_amount = min(self.positions[product] + self.position_limit[product], best_bid_amount)
+                        logger.print("SELL", str(sell_amount) + "x", best_bid)
+                        orders.append(Order(product, best_bid, -sell_amount))
+                        self.positions[product] -= sell_amount
+                        best_bid, best_bid_amount = list(order_depth.buy_orders.items())[1]
+
             
             if product == 'AMETHYSTS':  
                 order_depth: OrderDepth = state.order_depths[product]
@@ -208,14 +238,6 @@ class Trader:
                 result[product] = orders
                 logger.print('\n'+str(self.positions[product]))
                 #print(state.position[product])
-
-            if product == "STARFRUIT":
-                coefficients = [1, 8.35469697e-17]
-                intercept = -2.091837814077735e-11
-
-
-                    
-
                 
         traderData = "SAMPLE" # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
         
