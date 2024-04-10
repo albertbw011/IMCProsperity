@@ -203,18 +203,6 @@ class Trader:
        
                 result[product] = orders                
                                 
-                
-                        
-                    
-                
-                
-                
-                
-                
-                        
-                    
-
-                
         traderData = "SAMPLE" # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
         
         conversions = 1
