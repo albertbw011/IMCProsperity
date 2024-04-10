@@ -1,6 +1,8 @@
 import json
 from datamodel import Listing, Observation, Order, OrderDepth, ProsperityEncoder, Symbol, Trade, TradingState
 from typing import Any
+import collections
+import numpy as np
 
 class Logger:
     def __init__(self) -> None:
@@ -112,6 +114,7 @@ class Trader:
     position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20}
     mid_price_log = {'STARFRUIT': []}
     
+    
     def moving_average(self, item, period):
         if item in self.mid_price_log and len(self.mid_price_log[item]) >= period:
             return sum(self.mid_price_log[item][-period:]) / period
@@ -129,6 +132,8 @@ class Trader:
             weighted_ask += price * -volume
             total_volume -= volume
         return (weighted_bid + weighted_ask) / total_volume
+        
+
 
     
     def run(self, state: TradingState) -> tuple[dict[Symbol, list[Order]], int, str]:
@@ -142,7 +147,6 @@ class Trader:
                 self.positions[product] = state.position.get(product,0)
                 
                 acceptable_price = 10000
-                
                 if len(order_depth.sell_orders) != 0:
                     best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
                     if self.positions[product] < self.position_limit[product]:
@@ -175,15 +179,13 @@ class Trader:
                             self.positions[product] -= sell_amount
                             
                 result[product] = orders
-                logger.print('\n'+str(self.positions[product]))
-                logger.print(state.position.get(product,0))
             elif product == 'STARFRUIT':
                 order_depth: OrderDepth = state.order_depths[product]
                 orders: list[Order] = []
                 self.positions[product] = state.position.get(product,0)
+                self.mid_price_log[product].append((list(order_depth.sell_orders.items())[0][0] + list(order_depth.buy_orders.items())[0][0]) / 2)
                 
-                acceptable_price = self.calculate_weighted_price(order_depth)
-                
+                acceptable_price = self.calculate_weighted_price(order_depth) #calculates volume-based fair price
                 if len(order_depth.sell_orders) != 0:
                     best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
                     if self.positions[product] < self.position_limit[product]:
