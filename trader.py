@@ -143,7 +143,6 @@ class Trader:
                 self.positions[product] = state.position.get(product,0)
                 
                 acceptable_price = 10000
-                extra = 0
                 extraa = 5
                 extras = 20
                 
@@ -182,7 +181,8 @@ class Trader:
                     if self.positions[product] < 0 and self.positions[product] > -self.position_limit[product]:
                         best_bid += 1
                         #assert(best_bid < acceptable_price)
-                        buy_amount = -self.positions[product]+extraa
+                        buy_amount = -self.positions[product]
+                        buy_amount += extraa
                         #assert(sell_amount < self.position_limit[product])
 
                         logger.print("SELL", str(buy_amount) + "x", best_bid)
@@ -190,7 +190,8 @@ class Trader:
                     elif self.positions[product] < self.position_limit[product] and self.positions[product] > 0:
                         best_ask -= 1
                         #assert(best_ask > acceptable_price)
-                        sell_amount = self.positions[product]+extraa
+                        sell_amount = self.positions[product]
+                        sell_amount += extraa
                         #assert(sell_amount < self.position_limit[product])
                         logger.print("BUY", str(sell_amount) + "x", best_ask)
                         orders.append(Order(product,best_ask,-sell_amount))
@@ -240,14 +241,16 @@ class Trader:
                     if self.positions[product] < 0 and self.positions[product] > -self.position_limit[product]:
                         best_bid += 1
                         #assert(best_bid < acceptable_price)
-                        buy_amount = -self.positions[product]+extras
+                        buy_amount = -self.positions[product]
+                        buy_amount += extras
                         
                         logger.print("SELL", str(buy_amount) + "x", best_bid)
                         orders.append(Order(product,best_bid,buy_amount))
                     elif self.positions[product] < self.position_limit[product] and self.positions[product] > 0:
                         best_ask -= 1
                         #assert(best_ask > acceptable_price)
-                        sell_amount = self.positions[product]+extras
+                        sell_amount = self.positions[product]
+                        sell_amount += extras
                         logger.print("BUY", str(sell_amount) + "x", best_ask)
                         orders.append(Order(product,best_ask,-sell_amount))
 
