@@ -143,6 +143,7 @@ class Trader:
                 self.positions[product] = state.position.get(product,0)
                 
                 acceptable_price = 10000
+                extra = 0
                 extraa = 5
                 extras = 20
                 
