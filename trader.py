@@ -1,6 +1,12 @@
 import json
 from datamodel import Listing, Observation, Order, OrderDepth, ProsperityEncoder, Symbol, Trade, TradingState
-from typing import Any
+from typing import Dict, List, Any
+from datamodel import OrderDepth, TradingState, Order
+import collections
+import random
+import math
+import copy
+import numpy as np
 
 class Logger:
     def __init__(self) -> None:
@@ -144,7 +150,14 @@ class Trader:
             return price """    
         else:
             
+            
             return None
+
+
+
+
+
+
     
     def calculate_weighted_price(self, order_depth):
         weighted_bid = 0
@@ -157,6 +170,7 @@ class Trader:
             weighted_ask += price * -volume
             total_volume -= volume
         return (weighted_bid + weighted_ask) / total_volume
+    
     
 
     
@@ -239,10 +253,17 @@ class Trader:
                 window = 3
                 if len(self.starfruit_mid_price_log['STARFRUIT']) > window:
                     acceptable_price = self.moving_average('STARFRUIT', window)
+
+                # Append weighted price to mid-price log to calculate MA
+                self.starfruit_mid_price_log['STARFRUIT'].append(acceptable_price)
+                window = 3
+                if len(self.starfruit_mid_price_log['STARFRUIT']) > window:
+                    acceptable_price = self.moving_average('STARFRUIT', window)
                 
                 if len(order_depth.sell_orders) != 0:
                     best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
                     if self.positions[product] < self.position_limit[product]:
+                        #i = 0
                         #i = 0
                         if int(best_ask) < acceptable_price:
                             buy_amount = min(self.position_limit[product] - self.positions[product],-best_ask_amount)
@@ -254,9 +275,15 @@ class Trader:
                             #     best_ask, best_ask_amount = list(order_depth.sell_orders.items())[i]
                             # else:
                             #     break
+                            # i = i+1
+                            # if i < len(list(order_depth.sell_orders.items())):
+                            #     best_ask, best_ask_amount = list(order_depth.sell_orders.items())[i]
+                            # else:
+                            #     break
                 if len(order_depth.buy_orders) != 0:
                     best_bid, best_bid_amount = list(order_depth.buy_orders.items())[0]
                     if self.positions[product] > -self.position_limit[product]:
+                        i = 0
                         i = 0
                         if int(best_bid) > acceptable_price:
                             sell_amount = min(self.positions[product] + self.position_limit[product], best_bid_amount)
