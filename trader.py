@@ -143,11 +143,11 @@ class Trader:
             
             # Calculate and return the weighted average price. This is the weighted sum divided by the total weight.
             # This results in an average where more recent prices have a greater influence than older prices.
-            return weighted_sum / total_weight
-            """coef = [-0.01869561,  0.0455032 ,  0.16316049,  0.8090892]
-            intercept = 4.481696494462085
+            #return weighted_sum / total_weight
+            coef = [0.198477, 0.203191 ,0.257844, 0.340244]
+            intercept = 1.226555
             price = intercept + self.starfruit_mid_price_log[item][-4] * coef[0] + self.starfruit_mid_price_log[item][-3] * coef[1] + self.starfruit_mid_price_log[item][-2] * coef[2] + self.starfruit_mid_price_log[item][-1] * coef[3]
-            return price """    
+            return price
         else:
             
             
@@ -249,16 +249,12 @@ class Trader:
                 acceptable_price = self.calculate_weighted_price(order_depth)
                 sold_amount = 0
                 bought_amount = 0
+                sell_limit = -self.position_limit[product] - self.positions[product]
+                buy_limit = self.position_limit[product] - self.positions[product]
 
                 # Append weighted price to mid-price log to calculate MA
                 self.starfruit_mid_price_log['STARFRUIT'].append(acceptable_price)
-                window = 3
-                if len(self.starfruit_mid_price_log['STARFRUIT']) > window:
-                    acceptable_price = self.moving_average('STARFRUIT', window)
-
-                # Append weighted price to mid-price log to calculate MA
-                self.starfruit_mid_price_log['STARFRUIT'].append(acceptable_price)
-                window = 3
+                window = 4
                 if len(self.starfruit_mid_price_log['STARFRUIT']) > window:
                     acceptable_price = self.moving_average('STARFRUIT', window)
                 
@@ -294,32 +290,39 @@ class Trader:
                             orders.append(Order(product,best_bid,-sell_amount))
                             self.positions[product] -= sell_amount
                             sold_amount -= sell_amount
-                
-                if best_bid < acceptable_price and best_ask > acceptable_price:
+                """
+                if best_bid <= acceptable_price-1 and best_ask >= acceptable_price+1:
+                    best_bid += 1
+                    best_ask -= 1
                     if self.positions[product] < 0 and self.positions[product] > -self.position_limit[product]:
-                        best_bid += 1
                         #assert(best_bid < acceptable_price)
+                        self.positions[product] = state.position.get(product,0)
                         buy_amount = -self.positions[product]
                         buy_amount += extras
-
-                        logger.print("SELL", str(buy_amount) + "x", best_bid)
+                        sell_amount = self.position_limit[product] + self.positions[product]
+                        logger.print("BUY", str(buy_amount) + "x", best_bid)
                         orders.append(Order(product,best_bid,buy_amount))
+                        logger.print("SELL", str(sell_amount) + "x", best_ask)
+                        orders.append(Order(product,best_ask,-sell_amount))
                     elif self.positions[product] < self.position_limit[product] and self.positions[product] > 0:
-                        best_ask -= 1
                         #assert(best_ask > acceptable_price)
+                        self.positions[product] = state.position.get(product,0) 
                         sell_amount = self.positions[product]
                         sell_amount += extras
-                        logger.print("BUY", str(sell_amount) + "x", best_ask)
+                        buy_amount = self.position_limit[product] - self.positions[product]
+                        logger.print("SELL", str(sell_amount) + "x", best_ask)
                         orders.append(Order(product,best_ask,-sell_amount))
+                        logger.print("BUY", str(buy_amount) + "x", best_bid)
+                        orders.append(Order(product,best_bid,buy_amount))
                 """
-                left_to_sell = sold_amount - sell_limit #positive number
-                left_to_buy = buy_limit - bought_amount 
+                if best_bid <= acceptable_price-1 and best_ask >= acceptable_price+1:    
+                    left_to_sell = sold_amount - sell_limit #positive number
+                    left_to_buy = buy_limit - bought_amount 
 
-                logger.print("MAKING BUY", str(left_to_buy) + "x", best_bid+1)
-                orders.append(Order(product,best_bid+1,left_to_buy))
-                logger.print("MAKING SELL", str(left_to_sell) + "x", best_ask-1)
-                orders.append(Order(product,best_ask-1,-left_to_sell))
-                """
+                    logger.print("MAKING BUY", str(left_to_buy) + "x", best_bid+1)
+                    orders.append(Order(product,best_bid+1,left_to_buy))
+                    logger.print("MAKING SELL", str(left_to_sell) + "x", best_ask-1)
+                    orders.append(Order(product,best_ask-1,-left_to_sell))
        
                 result[product] = orders             
                      
