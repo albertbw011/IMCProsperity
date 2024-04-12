@@ -1,6 +1,12 @@
 import json
 from datamodel import Listing, Observation, Order, OrderDepth, ProsperityEncoder, Symbol, Trade, TradingState
-from typing import Any
+from typing import Dict, List, Any
+from datamodel import OrderDepth, TradingState, Order
+import collections
+import random
+import math
+import copy
+import numpy as np
 
 class Logger:
     def __init__(self) -> None:
@@ -111,12 +117,44 @@ class Trader:
     positions = {'AMETHYSTS': 0, 'STARFRUIT': 0}
     position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20}
     starfruit_mid_price_log = {'STARFRUIT': []}
+
     
+
+
     def moving_average(self, item, period):
+        '''
+        Calculate the weighted moving average price for the specified item over the specified period.
+        '''
+
+        # Check if the item exists in the starfruit_mid_price_log dictionary 
+        # and has enough entries to calculate the moving average for the given period.
         if item in self.starfruit_mid_price_log and len(self.starfruit_mid_price_log[item]) >= period:
-            return sum(self.starfruit_mid_price_log[item][-period:]) / period
+
+            # Extract the last 'period' number of prices for the specified item.
+            prices = self.starfruit_mid_price_log[item][-period:]
+            
+            # Generate a range of weights, it is linear in this case.
+            weights = range(1, period + 1)
+            
+            # Calculate the weighted sum of the prices. This is done by multiplying each price by its corresponding weight
+            # and then summing up the results. This step emphasizes more recent prices by assigning them higher weights.
+            weighted_sum = sum(price * weight for price, weight in zip(prices, weights))
+            
+            # Calculate the total weight by summing up all the weights.
+            total_weight = sum(weights)
+            
+            # Calculate and return the weighted average price. This is the weighted sum divided by the total weight.
+            # This results in an average where more recent prices have a greater influence than older prices.
+            return weighted_sum / total_weight
         else:
+            
             return None
+
+
+
+
+
+
     
     def calculate_weighted_price(self, order_depth):
         weighted_bid = 0
