@@ -304,6 +304,7 @@ class Trader:
                 sell_orders.sort(key = lambda x: x[0])
                 best_bid, best_bid_amount = buy_orders[0]
                 best_ask, best_ask_amount = sell_orders[0]
+                second_bid, second_bid_amount = buy_orders[1]
                 storage_fee = 0.1
                 #arbitrage
                 orchids_observation = state.observations.conversionObservations['ORCHIDS']
@@ -312,16 +313,17 @@ class Trader:
                 logger.print(import_price)
                 #selling at best bid
                 #want to buy back for lower
-                if import_price < best_bid:
+                """if import_price < best_bid:
                     orders.append(Order(product,best_bid,-best_bid_amount))
                     left_to_sell = 100 - best_bid_amount
                     best_bid, best_bid_amount = buy_orders[1]
                     orders.append(Order(product,best_bid+1,-left_to_sell))
+                    left_to_sell = left_to_sell - best_bid_amount"""
+                orders.append(Order(product,best_bid+2, -100))
                 if state.timestamp > 0:
                     conversions = -self.positions['ORCHIDS']
                 result[product] = orders
                 
-                #always sell at highest bid, then if second highest is lower, put market making offer
                             
                      
         traderData = "SAMPLE" # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
