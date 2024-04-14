@@ -1,6 +1,12 @@
 import json
 from datamodel import Listing, Observation, Order, OrderDepth, ProsperityEncoder, Symbol, Trade, TradingState
-from typing import Any
+from typing import Dict, List, Any
+from datamodel import OrderDepth, TradingState, Order
+import collections
+import random
+import math
+import copy
+import numpy as np
 
 class Logger:
     def __init__(self) -> None:
@@ -108,16 +114,116 @@ class Logger:
 logger = Logger()
 
 class Trader:
-    positions = {'AMETHYSTS': 0, 'STARFRUIT': 0}
-    position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20}
-    starfruit_mid_price_log = {'STARFRUIT': []}
+    positions = {'AMETHYSTS': 0, 'STARFRUIT': 0, 'ORCHIDS': 0}
+    position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20, 'ORCHIDS': 100}
+    mid_price_log = {'STARFRUIT': [], 'ORCHIDS' : []}
+    price_log = {'STARFRUIT':[], 'ORCHIDS' : []}
+    orchids_stats = {'SUNLIGHT' : [], 'HUMIDITY': [], 'EXPORT TARIFFS': [], 'IMPORT TARIFFS': [], 'SHIPPING COSTS': []}
+    trending = {'SUNLIGHT' : 0, 'HUMIDITY' : 0}
     
     def moving_average(self, item, period):
-        if item in self.starfruit_mid_price_log and len(self.starfruit_mid_price_log[item]) >= period:
-            return sum(self.starfruit_mid_price_log[item][-period:]) / period
+        '''
+        Calculate the weighted moving average price for the specified item over the specified period.
+        '''
+
+        # Check if the item exists in the mid_price_log dictionary 
+        # and has enough entries to calculate the moving average for the given period.
+        if item in self.mid_price_log and len(self.mid_price_log[item]) >= period:
+
+            # Extract the last 'period' number of prices for the specified item.
+            prices = self.mid_price_log[item][-period:]
+            
+            # Generate a range of weights, it is linear in this case.
+            weights = range(1, period + 1)
+            
+            # Calculate the weighted sum of the prices. This is done by multiplying each price by its corresponding weight
+            # and then summing up the results. This step emphasizes more recent prices by assigning them higher weights.
+            weighted_sum = sum(price * weight for price, weight in zip(prices, weights))
+            
+            # Calculate the total weight by summing up all the weights.
+            total_weight = sum(weights)
+            
+            # Calculate and return the weighted average price. This is the weighted sum divided by the total weight.
+            # This results in an average where more recent prices have a greater influence than older prices.
+            #return weighted_sum / total_weight
+            coef = [0.198477, 0.203191 ,0.257844, 0.340244]
+            intercept = 1.226555
+            price = intercept + self.mid_price_log[item][-4] * coef[0] + self.mid_price_log[item][-3] * coef[1] + self.mid_price_log[item][-2] * coef[2] + self.mid_price_log[item][-1] * coef[3]
+            return price
         else:
+            
+            
             return None
+        
+    # def calculate_slope(self, datapts, period):
+        
+    #     # Ensure that the period is valid
+    #     if period <= 0 or period >= len(datapts):
+    #         return None
+        
+    #     # Get the most recent data point
+    #     y2 = datapts[-1]
+        
+    #     # Get the data point from the given period ago
+    #     y1 = datapts[-period - 1]
+        
+    #     # Calculate the slope using the two data points
+    #     slope = (y2 - y1) / period
+        
+    #     return slope
+        
     
+    # def set_trending(self, datapts):
+    #     small_slope = self.calculate_slope(datapts, 3)
+    #     medium_slope = self.calculate_slope(datapts, 5)
+    #     large_slope = self.calculate_slope(datapts, 10)
+
+    #     if small_slope > medium_slope and medium_slope > large_slope:
+    #         self.trending = 1
+    #     elif small_slope < medium_slope and medium_slope < large_slope:
+    #         self.trending = -1
+    #     else:
+    #         self.trending = 0
+
+    def determine_trend(self, value, datapts, period):
+        """
+        Determines whether a stock is increasing, decreasing, or ranging over a given period,
+        based on all points within the period.
+        
+        Args:
+            datapts (list): A list of data points (e.g., stock prices).
+            period (int): The number of data points to consider for determining the trend.
+        
+        Returns:
+            str: "Increasing" if the stock is increasing over the given period,
+                "Decreasing" if the stock is decreasing over the given period,
+                "Ranging" if the stock is ranging (neither increasing nor decreasing) over the given period.
+        """
+        # Ensure that the period is valid
+        if period <= 1 or period > len(datapts):
+            return
+        
+        # Get the data points for the given period
+        period_data = datapts[-period:]
+        
+        # Calculate the price changes between consecutive points
+        price_changes = [period_data[i] - period_data[i - 1] for i in range(1, period)]
+        
+        # Count the number of positive, negative, and zero price changes
+        positive_changes = sum(1 for change in price_changes if change > 0)
+        negative_changes = sum(1 for change in price_changes if change < 0)
+        zero_changes = period - positive_changes - negative_changes
+        
+        # Determine the trend based on the counts
+        if positive_changes > negative_changes and positive_changes > zero_changes:
+            self.trending[value] = 1
+        elif negative_changes > positive_changes and negative_changes > zero_changes:
+            self.trending[value] = -1
+        else:
+            self.trending[value] = 0
+        
+
+
     def calculate_weighted_price(self, order_depth):
         weighted_bid = 0
         total_volume = 0
@@ -128,11 +234,14 @@ class Trader:
         for price, volume in list(order_depth.sell_orders.items()):
             weighted_ask += price * -volume
             total_volume -= volume
-        return weighted_ask, weighted_bid, (weighted_bid + weighted_ask) / total_volume
+        return (weighted_bid + weighted_ask) / total_volume
+    
+    
 
     
     def run(self, state: TradingState) -> tuple[dict[Symbol, list[Order]], int, str]:
         result = {}
+        time = state.timestamp
         
         for product in state.order_depths:
             
@@ -142,6 +251,11 @@ class Trader:
                 self.positions[product] = state.position.get(product,0)
                 
                 acceptable_price = 10000
+                buy_limit = self.position_limit[product] - self.positions[product]
+                sell_limit = - self.position_limit[product] - self.positions[product] #negative value
+                bought_amount = 0
+                sold_amount = 0
+                
                 
                 if len(order_depth.sell_orders) != 0:
                     best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
@@ -151,12 +265,15 @@ class Trader:
                             logger.print("BUY", str(buy_amount) + "x", best_ask)
                             orders.append(Order(product,best_ask,buy_amount))
                             self.positions[product] += buy_amount
-                            best_ask, best_ask_amount = list(order_depth.sell_orders.items())[1]
+                            bought_amount += buy_amount
+                            if buy_amount == -best_ask_amount:
+                                best_ask, best_ask_amount = list(order_depth.sell_orders.items())[1]
                         if int(best_ask) == acceptable_price and self.positions[product] < 0:
                             buy_amount = min(-self.positions[product],-best_ask_amount)
                             logger.print("BUY", str(buy_amount) + "x", best_ask)
                             orders.append(Order(product,best_ask,buy_amount))
                             self.positions[product] += buy_amount
+                            bought_amount += buy_amount
                     
                 
                 if len(order_depth.buy_orders) != 0:
@@ -167,12 +284,25 @@ class Trader:
                             logger.print("SELL", str(sell_amount) + "x", best_bid)
                             orders.append(Order(product,best_bid,-sell_amount))
                             self.positions[product] -= sell_amount
-                            best_bid, best_bid_amount = list(order_depth.buy_orders.items())[1]
+                            sold_amount -= sell_amount
+                            if sell_amount == best_bid_amount:
+                                best_bid, best_bid_amount = list(order_depth.buy_orders.items())[1]
                         if int(best_bid) == acceptable_price and self.positions[product] > 0:
                             sell_amount = min(self.positions[product],best_bid_amount)
                             logger.print("SELL", str(sell_amount) + "x", best_bid)
                             orders.append(Order(product,best_bid,-sell_amount))
                             self.positions[product] -= sell_amount
+                            sold_amount -= sell_amount
+                
+                left_to_sell = sold_amount - sell_limit #positive number
+                left_to_buy = buy_limit - bought_amount 
+
+                logger.print("MAKING BUY", str(left_to_buy) + "x", best_bid+1)
+                orders.append(Order(product,best_bid+1,left_to_buy))
+                logger.print("MAKING SELL", str(left_to_sell) + "x", best_ask-1)
+                orders.append(Order(product,best_ask-1,-left_to_sell))
+                    
+
                             
                 result[product] = orders
                 logger.print('\n'+str(self.positions[product]))
@@ -181,58 +311,119 @@ class Trader:
                 order_depth: OrderDepth = state.order_depths[product]
                 orders: list[Order] = []
                 self.positions[product] = state.position.get(product,0)
-                
-                acceptable_price = self.calculate_weighted_price(order_depth)[2]
+                extras = 20
+                acceptable_price = self.calculate_weighted_price(order_depth)
+                sold_amount = 0
+                bought_amount = 0
+                sell_limit = -self.position_limit[product] - self.positions[product]
+                buy_limit = self.position_limit[product] - self.positions[product]
 
                 # Append weighted price to mid-price log to calculate MA
-                self.starfruit_mid_price_log['STARFRUIT'].append(acceptable_price)
-                window = 3
-                if len(self.starfruit_mid_price_log['STARFRUIT']) > window:
+                self.mid_price_log['STARFRUIT'].append(acceptable_price)
+                window = 4
+                if len(self.mid_price_log['STARFRUIT']) > window:
                     acceptable_price = self.moving_average('STARFRUIT', window)
-
-                own_acceptable_bid = self.calculate_weighted_price(order_depth)[1]
-                own_acceptable_ask = self.calculate_weighted_price(order_depth)[0]
-
-                if(self.positions[product] < -self.position_limit[product]/2):
-                    buy_amount = 0 - self.positions[product]
-                    logger.print("BUY", str(buy_amount) + "x", own_acceptable_ask)
-                    orders.append(Order(product,own_acceptable_ask,buy_amount))
-                    self.positions[product] += buy_amount
-                elif(self.positions[product] > self.position_limit[product]/2):
-                    sell_amount = self.positions[product]
-                    logger.print("SELL", str(sell_amount) + "x", own_acceptable_bid)
-                    orders.append(Order(product,own_acceptable_bid,-sell_amount))
-                    self.positions[product] -= sell_amount
                 
                 if len(order_depth.sell_orders) != 0:
                     best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
                     if self.positions[product] < self.position_limit[product]:
-                        i = 0
-                        while (int(best_ask) < acceptable_price) :
+                        #i = 0
+                        #i = 0
+                        if int(best_ask) < acceptable_price:
                             buy_amount = min(self.position_limit[product] - self.positions[product],-best_ask_amount)
                             logger.print("BUY", str(buy_amount) + "x", best_ask)
                             orders.append(Order(product,best_ask,buy_amount))
                             self.positions[product] += buy_amount
-                            i = i+1
-                            if i < len(list(order_depth.sell_orders.items())):
-                                best_ask, best_ask_amount = list(order_depth.sell_orders.items())[i]
-                            else:
-                                break
+                            bought_amount += buy_amount
+                            # i = i+1
+                            # if i < len(list(order_depth.sell_orders.items())):
+                            #     best_ask, best_ask_amount = list(order_depth.sell_orders.items())[i]
+                            # else:
+                            #     break
+                            # i = i+1
+                            # if i < len(list(order_depth.sell_orders.items())):
+                            #     best_ask, best_ask_amount = list(order_depth.sell_orders.items())[i]
+                            # else:
+                            #     break
                 if len(order_depth.buy_orders) != 0:
                     best_bid, best_bid_amount = list(order_depth.buy_orders.items())[0]
                     if self.positions[product] > -self.position_limit[product]:
+                        i = 0
                         i = 0
                         if int(best_bid) > acceptable_price:
                             sell_amount = min(self.positions[product] + self.position_limit[product], best_bid_amount)
                             logger.print("SELL", str(sell_amount) + "x", best_bid)
                             orders.append(Order(product,best_bid,-sell_amount))
                             self.positions[product] -= sell_amount
-                            
+                            sold_amount -= sell_amount
+               
+                if best_bid <= acceptable_price-1 and best_ask >= acceptable_price+1:    
+                    left_to_sell = sold_amount - sell_limit #positive number
+                    left_to_buy = buy_limit - bought_amount 
+
+                    logger.print("MAKING BUY", str(left_to_buy) + "x", best_bid+1)
+                    orders.append(Order(product,best_bid+1,left_to_buy))
+                    logger.print("MAKING SELL", str(left_to_sell) + "x", best_ask-1)
+                    orders.append(Order(product,best_ask-1,-left_to_sell))
        
-                result[product] = orders                
-                                
+                result[product] = orders   
+ 
+            elif product == 'ORCHIDS':
+                order_depth: OrderDepth = state.order_depths[product]
+                orders: list[Order] = []
+                self.positions[product] = state.position.get(product,0)
+                acceptable_price = self.calculate_weighted_price(order_depth)
+
+                self.mid_price_log['ORCHIDS'].append(acceptable_price)
+
+                self.determine_trend('HUMIDITY', self.orchids_stats['HUMIDITY'], 10)
+                self.determine_trend('SUNLIGHT', self.orchids_stats['SUNLIGHT'], 10)
+                conversions = 0
+
+                if time>=100:
+                    # (state.observations.conversionObservations['ORCHIDS'].bidPrice)
+                    # print(state.observations.conversionObservations['ORCHIDS'].askPrice)
+                    conversions = 0
+                    self.orchids_stats['IMPORT TARIFFS'].append(state.observations.conversionObservations['ORCHIDS'].importTariff)
+                    self.orchids_stats['EXPORT TARIFFS'].append(state.observations.conversionObservations['ORCHIDS'].exportTariff)
+                    self.orchids_stats['SHIPPING COSTS'].append(state.observations.conversionObservations['ORCHIDS'].transportFees)
+                    self.orchids_stats['SUNLIGHT'].append(state.observations.conversionObservations['ORCHIDS'].sunlight)
+                    self.orchids_stats['HUMIDITY'].append(state.observations.conversionObservations['ORCHIDS'].sunlight)
+
+                    bought_amount = 0
+                    sold_amount = 0
+                
+                    if self.trending['SUNLIGHT'] == 1 and self.trending['HUMIDITY'] == 1:
+                        acceptable_price = 99999999999
+                        if len(order_depth.sell_orders) != 0:
+                            best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
+                            if self.positions[product] < self.position_limit[product]:
+                                if int(best_ask) < acceptable_price:
+                                    buy_amount = min(self.position_limit[product] - self.positions[product],-best_ask_amount)
+                                    logger.print("BUY", str(buy_amount) + "x", best_ask)
+                                    orders.append(Order(product,best_ask,buy_amount))
+                                    self.positions[product] += buy_amount
+                                    bought_amount += buy_amount
+                    elif self.trending['SUNLIGHT'] == -1 and self.trending['HUMIDITY'] == -1 :
+                        acceptable_price = 0
+                        if len(order_depth.buy_orders) != 0:
+                            best_bid, best_bid_amount = list(order_depth.buy_orders.items())[0]
+                            if self.positions[product] > -self.position_limit[product]:
+                                if int(best_bid) > acceptable_price:
+                                    sell_amount = min(self.positions[product] + self.position_limit[product], best_bid_amount)
+                                    logger.print("SELL", str(sell_amount) + "x", best_bid)
+                                    orders.append(Order(product,best_bid,-sell_amount))
+                                    self.positions[product] -= sell_amount
+                                    sold_amount -= sell_amount
+                                    if sell_amount == best_bid_amount:
+                                        best_bid, best_bid_amount = list(order_depth.buy_orders.items())[1]
+                else:       
+                    result['ORCHIDS'] = [Order('ORCHIDS',best_bid,-2)]
+
+                result[product] = orders
+
+                     
         traderData = "SAMPLE" # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
         
-        conversions = 1
         logger.flush(state, result, conversions, traderData)
         return result, conversions, traderData
