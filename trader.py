@@ -313,18 +313,13 @@ class Trader:
                 logger.print(import_price)
                 #selling at best bid
                 #want to buy back for lower
-                """if import_price < best_bid:
-                    orders.append(Order(product,best_bid,-best_bid_amount))
-                    left_to_sell = 100 - best_bid_amount
-                    best_bid, best_bid_amount = buy_orders[1]
-                    orders.append(Order(product,best_bid+1,-left_to_sell))
-                    left_to_sell = left_to_sell - best_bid_amount"""
                 #if best_ask - best_bid < 7:
                     #orders.append(Order(product,best_bid+1, -100))
                 #else:
-                orders.append(Order(product,best_bid+2, -20))
-                if state.timestamp > 0:
-                    conversions = -self.positions['ORCHIDS']
+                if best_bid+2 > import_price:
+                    orders.append(Order(product,best_bid+2, -100))
+                    if state.timestamp > 0:
+                        conversions = -self.positions['ORCHIDS']
                 result[product] = orders
                 
                             
