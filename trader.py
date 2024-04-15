@@ -319,7 +319,10 @@ class Trader:
                     best_bid, best_bid_amount = buy_orders[1]
                     orders.append(Order(product,best_bid+1,-left_to_sell))
                     left_to_sell = left_to_sell - best_bid_amount"""
-                orders.append(Order(product,best_bid+2, -100))
+                #if best_ask - best_bid < 7:
+                    #orders.append(Order(product,best_bid+1, -100))
+                #else:
+                orders.append(Order(product,best_bid+2, -20))
                 if state.timestamp > 0:
                     conversions = -self.positions['ORCHIDS']
                 result[product] = orders
