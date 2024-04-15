@@ -369,58 +369,66 @@ class Trader:
                 result[product] = orders   
  
             elif product == 'ORCHIDS':
-                order_depth: OrderDepth = state.order_depths[product]
                 orders: list[Order] = []
-                self.positions[product] = state.position.get(product,0)
-                acceptable_price = self.calculate_weighted_price(order_depth)
+                order_depth = state.order_depths['ORCHIDS']
+                self.positions['ORCHIDS'] = state.position.get(product,0)
+                buy_orders = list(order_depth.buy_orders.items())
+                buy_orders.sort(key = lambda x:x[0], reverse = True)
+                sell_orders = list(order_depth.sell_orders.items())
+                sell_orders.sort(key = lambda x: x[0])
+                best_bid, best_bid_amount = buy_orders[0]
+                best_ask, best_ask_amount = sell_orders[0]
+                second_bid, second_bid_amount = buy_orders[1]
+                storage_fee = 0.1
 
-                self.mid_price_log['ORCHIDS'].append(acceptable_price)
+                self.orchids_stats['IMPORT TARIFFS'].append(state.observations.conversionObservations['ORCHIDS'].importTariff)
+                self.orchids_stats['EXPORT TARIFFS'].append(state.observations.conversionObservations['ORCHIDS'].exportTariff)
+                self.orchids_stats['SHIPPING COSTS'].append(state.observations.conversionObservations['ORCHIDS'].transportFees)
+                self.orchids_stats['SUNLIGHT'].append(state.observations.conversionObservations['ORCHIDS'].sunlight)
+                self.orchids_stats['HUMIDITY'].append(state.observations.conversionObservations['ORCHIDS'].sunlight)
 
-                self.determine_trend('HUMIDITY', self.orchids_stats['HUMIDITY'], 10)
-                self.determine_trend('SUNLIGHT', self.orchids_stats['SUNLIGHT'], 10)
-                conversions = 0
+                #arbitrage
+                orchids_observation = state.observations.conversionObservations['ORCHIDS']
+                import_price = orchids_observation.askPrice + orchids_observation.importTariff + orchids_observation.transportFees
+                export_price = orchids_observation.bidPrice + orchids_observation.exportTariff + orchids_observation.transportFees
+                logger.print(import_price)
 
-                if time>=100:
-                    # (state.observations.conversionObservations['ORCHIDS'].bidPrice)
-                    # print(state.observations.conversionObservations['ORCHIDS'].askPrice)
-                    conversions = 0
-                    self.orchids_stats['IMPORT TARIFFS'].append(state.observations.conversionObservations['ORCHIDS'].importTariff)
-                    self.orchids_stats['EXPORT TARIFFS'].append(state.observations.conversionObservations['ORCHIDS'].exportTariff)
-                    self.orchids_stats['SHIPPING COSTS'].append(state.observations.conversionObservations['ORCHIDS'].transportFees)
-                    self.orchids_stats['SUNLIGHT'].append(state.observations.conversionObservations['ORCHIDS'].sunlight)
-                    self.orchids_stats['HUMIDITY'].append(state.observations.conversionObservations['ORCHIDS'].sunlight)
 
-                    bought_amount = 0
-                    sold_amount = 0
+                #selling at best bid
+                #want to buy back for lower
+
+                spread = best_ask - best_bid
+                high_volume = spread
+                if high_volume > 100:
+                    high_volume = 100
                 
-                    if self.trending['SUNLIGHT'] == 1 and self.trending['HUMIDITY'] == 1:
-                        acceptable_price = 99999999999
-                        if len(order_depth.sell_orders) != 0:
-                            best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
-                            if self.positions[product] < self.position_limit[product]:
-                                if int(best_ask) < acceptable_price:
-                                    buy_amount = min(self.position_limit[product] - self.positions[product],-best_ask_amount)
-                                    logger.print("BUY", str(buy_amount) + "x", best_ask)
-                                    orders.append(Order(product,best_ask,buy_amount))
-                                    self.positions[product] += buy_amount
-                                    bought_amount += buy_amount
-                    elif self.trending['SUNLIGHT'] == -1 and self.trending['HUMIDITY'] == -1 :
-                        acceptable_price = 0
-                        if len(order_depth.buy_orders) != 0:
-                            best_bid, best_bid_amount = list(order_depth.buy_orders.items())[0]
-                            if self.positions[product] > -self.position_limit[product]:
-                                if int(best_bid) > acceptable_price:
-                                    sell_amount = min(self.positions[product] + self.position_limit[product], best_bid_amount)
-                                    logger.print("SELL", str(sell_amount) + "x", best_bid)
-                                    orders.append(Order(product,best_bid,-sell_amount))
-                                    self.positions[product] -= sell_amount
-                                    sold_amount -= sell_amount
-                                    if sell_amount == best_bid_amount:
-                                        best_bid, best_bid_amount = list(order_depth.buy_orders.items())[1]
-                else:       
-                    result['ORCHIDS'] = [Order('ORCHIDS',best_bid,-2)]
+                
+                one_volume = 10-spread
+                if one_volume < 0:
+                    one_volume =  0
 
+                low_volume  = 100 - high_volume - one_volume
+                
+                orders.append(Order(product,best_bid+3, -high_volume))
+                orders.append(Order(product,best_bid+2, -low_volume))
+                orders.append(Order(product,best_bid+1, -one_volume))
+
+                if state.timestamp > 0:
+                    conversions = -self.positions['ORCHIDS']
                 result[product] = orders
+
+
+                # order_depth: OrderDepth = state.order_depths[product]
+                # orders: list[Order] = []
+                # self.positions[product] = state.position.get(product,0)
+                # acceptable_price = self.calculate_weighted_price(order_depth)
+
+                # self.mid_price_log['ORCHIDS'].append(acceptable_price)
+
+                # # self.determine_trend('HUMIDITY', self.orchids_stats['HUMIDITY'], 10)
+                # # self.determine_trend('SUNLIGHT', self.orchids_stats['SUNLIGHT'], 10)
+
+                # result[product] = orders
 
                      
         traderData = "SAMPLE" # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
