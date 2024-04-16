@@ -1,9 +1,12 @@
 __pycache__/datamodel.cpython-39.pyc
 __pycache__/trader.cpython-39.pyc
+<<<<<<< HEAD
 backtests/2024-04-09_22-06-57.log
 backtests/2024-04-09_22-07-34.log
 backtests/2024-04-09_22-28-56.log
 backtests/2024-04-09_22-29-19.log
+=======
+>>>>>>> 95b8581e06831a7c38bff7e269194cdbbc66b34f
 backtests/2024-04-09_23-30-51.log
 backtests/2024-04-09_23-42-04.log
 backtests/2024-04-09_23-44-27.log
