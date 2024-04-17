@@ -523,12 +523,12 @@ class Trader:
 
                 # result[product] = orders
         
-        # orders = self.compute_orders_basket(state.order_depths)
-        # if len(orders['GIFT_BASKET']) != 0:
-        #     result['GIFT_BASKET'] = orders['GIFT_BASKET']
-        # result['CHOCOLATE'] = orders['CHOCOLATE']
-        # result['STRAWBERRIES'] = orders['STRAWBERRIES']
-        # result['ROSES'] = orders['ROSES']
+        orders = self.compute_orders_basket(state.order_depths)
+        if len(orders['GIFT_BASKET']) != 0:
+            result['GIFT_BASKET'] = orders['GIFT_BASKET']
+        result['CHOCOLATE'] = orders['CHOCOLATE']
+        result['STRAWBERRIES'] = orders['STRAWBERRIES']
+        result['ROSES'] = orders['ROSES']
 
                      
         traderData = "SAMPLE" # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
