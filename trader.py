@@ -118,10 +118,9 @@ class Trader:
     position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20, 'ORCHIDS': 100, 'CHOCOLATE': 250, 'STRAWBERRIES': 350, 'ROSES': 60, 'GIFT_BASKET': 60}
     starfruit_mid_price_log = {'STARFRUIT': []}
     starfruit_price_log = {'STARFRUIT':[]}
-    spreads = []
+    basket_price_log = {'COMBINED': [], 'BASKET': [], 'DELTA': []}
     trending = 0    
 
-    
     def moving_average(self, item, period):
         '''
         Calculate the weighted moving average price for the specified item over the specified period.
@@ -173,10 +172,13 @@ class Trader:
         return (weighted_bid + weighted_ask) / total_volume
     
     def mid_price(self, order_depth):
-        best_bid = list(order_depth.sell_orders.values())[0]
-        best_ask = list(order_depth.buy_orders.values())[0]
+        best_bid = sorted(list(order_depth.sell_orders.keys()))[0]
+        best_ask = sorted(list(order_depth.buy_orders.keys()))[0]
 
-        return best_bid - best_ask
+        return (best_ask + best_bid) / 2
+    
+    def no_positions_basket(self, positions):
+        return positions['CHOCOLATE'] == positions['ROSES'] == positions['STRAWBERRIES'] == 0
     
     def calculate_basket(self, state):
         order_depth = state.order_depths
@@ -216,15 +218,23 @@ class Trader:
 
         combined_price = 4*prices[chocolate] + 6*prices[strawberries] + prices[roses]
         price_diff = prices[gift_basket] - combined_price
-        etf_premium = 386
+        self.basket_price_log['COMBINED'].append(combined_price)
+        self.basket_price_log['BASKET'].append(prices[gift_basket])
+        self.basket_price_log['DELTA'].append(price_diff)
+        etf_premium = 380
 
-        if price_diff > etf_premium:
-            units = (price_diff // etf_premium) * 10
-
-            orders[chocolate].append(Order(chocolate, best_ask_chocolate, -best_ask_amount_chocolate))
-            orders[strawberries].append(Order(strawberries, best_ask_strawberries, -best_ask_amount_strawberries))
-            orders[roses].append(Order(roses, best_ask_roses, -best_ask_amount_roses))
-            orders[gift_basket].append(Order(gift_basket, best_bid_gift, best_bid_amount_gift))
+        # if the etf prices exceeds from the price of the individual products + the threshold, then we short the products and long the etf
+        if len(self.basket_price_log['BASKET']) >= 2:
+            if self.basket_price_log['DELTA'][-2] < etf_premium and self.basket_price_log['DELTA'][-1] > etf_premium:
+                orders[chocolate].append(Order(chocolate, best_ask_chocolate, -best_ask_amount_chocolate))
+                orders[strawberries].append(Order(strawberries, best_ask_strawberries, -best_ask_amount_strawberries))
+                orders[roses].append(Order(roses, best_ask_roses, -best_ask_amount_roses))
+                orders[gift_basket].append(Order(gift_basket, best_bid_gift, best_bid_amount_gift))
+            elif self.basket_price_log['DELTA'][-2] > etf_premium and self.basket_price_log['DELTA'][-1] < etf_premium:
+                orders[chocolate].append(Order(chocolate, best_bid_chocolate, max(self.positions[chocolate], best_bid_amount_chocolate)))
+                orders[strawberries].append(Order(strawberries, best_bid_strawberries, max(self.positions[strawberries], best_bid_amount_strawberries)))
+                orders[roses].append(Order(roses, best_bid_roses, max(self.positions[roses], best_bid_amount_roses)))
+                orders[gift_basket].append(Order(gift_basket, best_ask_gift, min(-self.positions[gift_basket], best_ask_amount_gift)))
 
         return orders
     
@@ -232,7 +242,7 @@ class Trader:
         result = {}
         conversions = 0
         
-        for product in state.order_depths:
+        """for product in state.order_depths:
             
             if product == 'ORCHIDS':
                 order_depth: OrderDepth = state.order_depths[product]
@@ -251,7 +261,7 @@ class Trader:
                 import_price = orchids_observation.askPrice + orchids_observation.importTariff + orchids_observation.transportFees
                 export_price = orchids_observation.bidPrice + orchids_observation.exportTariff + orchids_observation.transportFees
 
-                if orchids_observation.importTarrif >= -2:
+                if orchids_observation.importTariff >= -2:
                     orders.append(Order(product, best_bid+2, -100))
                     if state.timestamp > 0 and import_price < best_ask:
                         conversions = -self.positions[product]
@@ -312,16 +322,16 @@ class Trader:
                 left_to_sell = sold_amount - sell_limit #positive number
                 left_to_buy = buy_limit - bought_amount 
 
-                logger.print("MAKING BUY", str(left_to_buy) + "x", best_bid+1)
+                #logger.print("MAKING BUY", str(left_to_buy) + "x", best_bid+1)
                 orders.append(Order(product,best_bid+1,left_to_buy))
-                logger.print("MAKING SELL", str(left_to_sell) + "x", best_ask-1)
+                #logger.print("MAKING SELL", str(left_to_sell) + "x", best_ask-1)
                 orders.append(Order(product,best_ask-1,-left_to_sell))
                     
 
                             
                 result[product] = orders
-                logger.print('\n'+str(self.positions[product]))
-                logger.print(state.position.get(product,0))
+                #logger.print('\n'+str(self.positions[product]))
+                #logger.print(state.position.get(product,0))
 
             elif product == 'STARFRUIT':
                 order_depth: OrderDepth = state.order_depths[product]
@@ -335,7 +345,7 @@ class Trader:
                 buy_limit = self.position_limit[product] - self.positions[product]
 
                 # Append weighted price to mid-price log to calculate MA
-                self.starfruit_mid_price_log['STARFRUIT'].append(acceptable_price)
+                #self.starfruit_mid_price_log['STARFRUIT'].append(acceptable_price)
                 window = 4
                 #if len(self.starfruit_mid_price_log['STARFRUIT']) > window:
                     #acceptable_price = self.moving_average('STARFRUIT', window)
@@ -347,7 +357,7 @@ class Trader:
                         #i = 0
                         if int(best_ask) < acceptable_price:
                             buy_amount = min(self.position_limit[product] - self.positions[product],-best_ask_amount)
-                            logger.print("BUY", str(buy_amount) + "x", best_ask)
+                            #logger.print("BUY", str(buy_amount) + "x", best_ask)
                             orders.append(Order(product,best_ask,buy_amount))
                             self.positions[product] += buy_amount
                             bought_amount += buy_amount
@@ -368,7 +378,7 @@ class Trader:
                         i = 0
                         if int(best_bid) > acceptable_price:
                             sell_amount = min(self.positions[product] + self.position_limit[product], best_bid_amount)
-                            logger.print("SELL", str(sell_amount) + "x", best_bid)
+                            #logger.print("SELL", str(sell_amount) + "x", best_bid)
                             orders.append(Order(product,best_bid,-sell_amount))
                             self.positions[product] -= sell_amount
                             sold_amount -= sell_amount
@@ -376,12 +386,12 @@ class Trader:
                     left_to_sell = sold_amount - sell_limit #positive number
                     left_to_buy = buy_limit - bought_amount 
 
-                    logger.print("MAKING BUY", str(left_to_buy) + "x", best_bid+1)
+                    #logger.print("MAKING BUY", str(left_to_buy) + "x", best_bid+1)
                     orders.append(Order(product,best_bid+1,left_to_buy))
-                    logger.print("MAKING SELL", str(left_to_sell) + "x", best_ask-1)
+                    #logger.print("MAKING SELL", str(left_to_sell) + "x", best_ask-1)
                     orders.append(Order(product,best_ask-1,-left_to_sell))
        
-                result[product] = orders
+                result[product] = orders"""
 
         # orders for gift basket
         basket_orders = self.calculate_basket(state)
