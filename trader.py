@@ -193,48 +193,53 @@ class Trader:
             gift_basket: []
         }
 
-        order_depth_dict = {
-            chocolate: order_depth[chocolate],
-            strawberries: order_depth[strawberries],
-            roses: order_depth[roses],
-            gift_basket: order_depth[gift_basket]
-        }
-
         prices = {
-            chocolate: self.mid_price(order_depth[chocolate]),
-            strawberries: self.mid_price(order_depth[strawberries]),
-            roses: self.mid_price(order_depth[roses]),
-            gift_basket: self.mid_price(order_depth[gift_basket])
+            chocolate: self.calculate_weighted_price(order_depth[chocolate]),
+            strawberries: self.calculate_weighted_price(order_depth[strawberries]),
+            roses: self.calculate_weighted_price(order_depth[roses]),
+            gift_basket: self.calculate_weighted_price(order_depth[gift_basket])
         }
 
-        best_ask_chocolate, best_ask_amount_chocolate = list(order_depth_dict[chocolate].sell_orders.items())[0]
-        best_ask_strawberries, best_ask_amount_strawberries = list(order_depth_dict[strawberries].sell_orders.items())[0]
-        best_ask_roses, best_ask_amount_roses = list(order_depth_dict[roses].sell_orders.items())[0]
-        best_ask_gift, best_ask_amount_gift = list(order_depth_dict[gift_basket].sell_orders.items())[0]
-        best_bid_chocolate, best_bid_amount_chocolate = list(order_depth_dict[chocolate].buy_orders.items())[0]
-        best_bid_strawberries, best_bid_amount_strawberries = list(order_depth_dict[strawberries].buy_orders.items())[0]
-        best_bid_roses, best_bid_amount_roses = list(order_depth_dict[roses].buy_orders.items())[0]
-        best_bid_gift, best_bid_amount_gift = list(order_depth_dict[gift_basket].buy_orders.items())[0]
+        best_ask_chocolate, best_ask_amount_chocolate = list(order_depth[chocolate].sell_orders.items())[0]
+        best_ask_strawberries, best_ask_amount_strawberries = list(order_depth[strawberries].sell_orders.items())[0]
+        best_ask_roses, best_ask_amount_roses = list(order_depth[roses].sell_orders.items())[0]
+        best_ask_gift, best_ask_amount_gift = list(order_depth[gift_basket].sell_orders.items())[0]
+        best_bid_chocolate, best_bid_amount_chocolate = list(order_depth[chocolate].buy_orders.items())[0]
+        best_bid_strawberries, best_bid_amount_strawberries = list(order_depth[strawberries].buy_orders.items())[0]
+        best_bid_roses, best_bid_amount_roses = list(order_depth[roses].buy_orders.items())[0]
+        best_bid_gift, best_bid_amount_gift = list(order_depth[gift_basket].buy_orders.items())[0]
 
         combined_price = 4*prices[chocolate] + 6*prices[strawberries] + prices[roses]
         price_diff = prices[gift_basket] - combined_price
         self.basket_price_log['COMBINED'].append(combined_price)
         self.basket_price_log['BASKET'].append(prices[gift_basket])
         self.basket_price_log['DELTA'].append(price_diff)
-        etf_premium = 380
+        etf_premium = 386
 
         # if the etf prices exceeds from the price of the individual products + the threshold, then we short the products and long the etf
         if len(self.basket_price_log['BASKET']) >= 2:
             if self.basket_price_log['DELTA'][-2] < etf_premium and self.basket_price_log['DELTA'][-1] > etf_premium:
-                orders[chocolate].append(Order(chocolate, best_ask_chocolate, -best_ask_amount_chocolate))
-                orders[strawberries].append(Order(strawberries, best_ask_strawberries, -best_ask_amount_strawberries))
-                orders[roses].append(Order(roses, best_ask_roses, -best_ask_amount_roses))
-                orders[gift_basket].append(Order(gift_basket, best_bid_gift, best_bid_amount_gift))
+                units = min(best_ask_amount_roses, best_ask_amount_gift)
+                orders[chocolate].append(Order(chocolate, best_ask_chocolate, min(self.positions[chocolate], -(units*4))))
+                orders[strawberries].append(Order(strawberries, best_ask_strawberries, min(self.positions[strawberries], -(units*6))))
+                orders[roses].append(Order(roses, best_ask_roses, min(self.positions[roses], -units)))
+                orders[gift_basket].append(Order(gift_basket, best_bid_gift, max(-self.positions[gift_basket], units)))
+
+                self.positions[chocolate] -= min(self.positions[chocolate], -(units*4))
+                self.positions[strawberries] -= min(self.positions[strawberries], -(units*6))
+                self.positions[roses] -= min(self.positions[roses], -units)
+                self.positions[gift_basket] += max(-self.positions[gift_basket], units)
+
             elif self.basket_price_log['DELTA'][-2] > etf_premium and self.basket_price_log['DELTA'][-1] < etf_premium:
                 orders[chocolate].append(Order(chocolate, best_bid_chocolate, max(self.positions[chocolate], best_bid_amount_chocolate)))
                 orders[strawberries].append(Order(strawberries, best_bid_strawberries, max(self.positions[strawberries], best_bid_amount_strawberries)))
                 orders[roses].append(Order(roses, best_bid_roses, max(self.positions[roses], best_bid_amount_roses)))
                 orders[gift_basket].append(Order(gift_basket, best_ask_gift, min(-self.positions[gift_basket], best_ask_amount_gift)))
+
+                self.positions[chocolate] += max(self.positions[chocolate], best_bid_amount_chocolate)
+                self.positions[strawberries] += max(self.positions[strawberries], best_bid_amount_strawberries)
+                self.positions[roses] += max(self.positions[roses], best_bid_amount_roses)
+                self.positions[gift_basket] -= min(-self.positions[gift_basket], best_ask_amount_gift)
 
         return orders
     
