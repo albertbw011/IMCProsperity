@@ -114,8 +114,8 @@ class Logger:
 logger = Logger()
 
 class Trader:
-    positions = {'AMETHYSTS': 0, 'STARFRUIT': 0,'ORCHIDS': 0}
-    position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20,'ORCHIDS': 100}
+    positions = {'AMETHYSTS': 0, 'STARFRUIT': 0,'ORCHIDS': 0, 'GIFT_BASKET': 0, 'CHOCOLATE': 0, 'STRAWBERRIES': 0, 'ROSES': 0}
+    position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20,'ORCHIDS': 100, 'GIFT_BASKET': 60, 'CHOCOLATE': 250, 'STRAWBERRIES': 360, 'ROSES': 60}
     starfruit_mid_price_log = {'STARFRUIT': []}
     starfruit_price_log = {'STARFRUIT':[]}
     
@@ -165,6 +165,38 @@ class Trader:
             weighted_ask += price * -volume
             total_volume -= volume
         return (weighted_bid + weighted_ask) / total_volume
+    
+    def compute_gift_basket_orders(self,product, state):
+        gb_od = state.order_depths['GIFT_BASKET']
+        choc_od = state.order_depths['CHOCOLATE']
+        straw_od = state.order_depths['STRAWBERRIES']
+        rose_od = state.order_depths['ROSES']
+        gb_mp = self.get_mid_price(gb_od)
+        choc_mp = self.get_mid_price(choc_od)
+        straw_mp = self.get_mid_price(straw_od)
+        rose_mp = self.get_mid_price(rose_od)
+        difference = gb_mp - (choc_mp * 4) - (straw_mp * 6) - rose_mp
+        flag = 0
+        if difference > 390:
+            flag = 1 #sell gb, buy everything else
+        if difference < 360:
+            flag = -1 #buy gb, sell everything else
+        return flag
+        
+            
+        
+        
+        
+        
+    def get_mid_price(self,order_depth):
+        buy_orders = list(order_depth.buy_orders.items())
+        buy_orders.sort(key = lambda x:x[0], reverse = True)
+        sell_orders = list(order_depth.sell_orders.items())
+        sell_orders.sort(key = lambda x: x[0])
+        best_bid, best_bid_amount = buy_orders[0]
+        best_ask, best_ask_amount = sell_orders[0]
+        return (best_bid + best_ask) /2
+        
     
 
     
@@ -321,6 +353,38 @@ class Trader:
                     if state.timestamp > 0:
                         conversions = -self.positions['ORCHIDS']
                 result[product] = orders
+            elif product == 'GIFT_BASKET':
+                orders: list[Order] = []
+                order_depth = state.order_depths[product]
+                self.positions['GIFT_BASKET'] = state.position.get(product,0)
+                buy_orders = list(order_depth.buy_orders.items())
+                buy_orders.sort(key = lambda x:x[0], reverse = True)
+                sell_orders = list(order_depth.sell_orders.items())
+                sell_orders.sort(key = lambda x: x[0])
+                best_bid, best_bid_amount = buy_orders[0]
+                best_ask, best_ask_amount = sell_orders[0]
+                flag = self.compute_gift_basket_orders(product, state)
+                if flag == -1:
+                    buy_amount = min(-best_ask_amount, 58 - self.positions['GIFT_BASKET'])
+                    orders.append(Order(product,best_ask, buy_amount))
+                    left_to_buy = 58 - self.positions[product] - buy_amount
+                    if -best_ask_amount == buy_amount:
+                        best_ask, best_ask_amount = sell_orders[1]
+                        test_value = int((best_ask + best_bid) / 2)
+                        orders.append(Order(product,test_value,left_to_buy))
+                else:
+                    sell_amount = min(best_bid_amount,58 + self.positions[product])
+                    orders.append(Order(product,best_bid, -sell_amount))
+                    left_to_sell = 58 + self.positions[product] - sell_amount
+                    if sell_amount == best_bid_amount:
+                        best_bid, best_bid_amount = buy_orders[1]
+                        test_value = int((best_ask + best_bid) / 2)
+                        orders.append(Order(product,test_value,left_to_sell))
+
+                
+                result[product] = orders
+                    
+                
                 
                             
                      
