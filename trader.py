@@ -118,6 +118,7 @@ class Trader:
     position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20,'ORCHIDS': 100, 'GIFT_BASKET': 60, 'CHOCOLATE': 250, 'STRAWBERRIES': 360, 'ROSES': 60}
     starfruit_mid_price_log = {'STARFRUIT': []}
     starfruit_price_log = {'STARFRUIT':[]}
+    baskets_mp = {'GB' : [],'CHOC' :[], 'STRAW': [], 'ROSE': [], 'SUM': []}
     
     def moving_average(self, item, period):
         '''
@@ -149,9 +150,12 @@ class Trader:
             price = intercept + self.starfruit_mid_price_log[item][-4] * coef[0] + self.starfruit_mid_price_log[item][-3] * coef[1] + self.starfruit_mid_price_log[item][-2] * coef[2] + self.starfruit_mid_price_log[item][-1] * coef[3]
             return price
         else:
-            
-            
             return None
+        
+    def MA_baskets(self,period,product):
+        total_sum = sum(self.baskets_mp[product][-period:])
+        return total_sum/period
+        
 
     
     def calculate_weighted_price(self, order_depth):
@@ -166,21 +170,26 @@ class Trader:
             total_volume -= volume
         return (weighted_bid + weighted_ask) / total_volume
     
-    def compute_gift_basket_orders(self,product, state):
+    def compute_gift_basket_orders(self,product, state,timestamp):
         gb_od = state.order_depths['GIFT_BASKET']
         choc_od = state.order_depths['CHOCOLATE']
         straw_od = state.order_depths['STRAWBERRIES']
         rose_od = state.order_depths['ROSES']
-        gb_mp = self.get_mid_price(gb_od)
-        choc_mp = self.get_mid_price(choc_od)
-        straw_mp = self.get_mid_price(straw_od)
-        rose_mp = self.get_mid_price(rose_od)
-        difference = gb_mp - (choc_mp * 4) - (straw_mp * 6) - rose_mp
         flag = 0
-        if difference > 390:
-            flag = 1 #sell gb, buy everything else
-        if difference < 360:
-            flag = -1 #buy gb, sell everything else
+        self.baskets_mp['GB'].append(self.get_mid_price(gb_od))
+        self.baskets_mp['CHOC'].append(self.get_mid_price(choc_od))
+        self.baskets_mp['STRAW'].append(self.get_mid_price(straw_od))
+        self.baskets_mp['ROSE'].append(self.get_mid_price(rose_od))
+        self.baskets_mp['SUM'].append(4* self.get_mid_price(choc_od) + 6*self.get_mid_price(straw_od) + self.get_mid_price(rose_od))
+        if timestamp > 500:
+            MA_3 = self.MA_baskets(3, 'SUM')
+            MA_5 = self.MA_baskets(5, 'SUM')
+            logger.print(MA_3)
+            logger.print(MA_5)
+            if MA_3 > MA_5:
+                flag = -1 #buy gb
+            if  MA_3 < MA_5:
+                flag = 1 #sell gb
         return flag
         
             
@@ -363,23 +372,26 @@ class Trader:
                 sell_orders.sort(key = lambda x: x[0])
                 best_bid, best_bid_amount = buy_orders[0]
                 best_ask, best_ask_amount = sell_orders[0]
-                flag = self.compute_gift_basket_orders(product, state)
-                if flag == -1:
-                    buy_amount = min(-best_ask_amount, 58 - self.positions['GIFT_BASKET'])
-                    orders.append(Order(product,best_ask, buy_amount))
-                    left_to_buy = 58 - self.positions[product] - buy_amount
-                    if -best_ask_amount == buy_amount:
-                        best_ask, best_ask_amount = sell_orders[1]
-                        test_value = int((best_ask + best_bid) / 2)
-                        orders.append(Order(product,test_value,left_to_buy))
-                else:
-                    sell_amount = min(best_bid_amount,58 + self.positions[product])
-                    orders.append(Order(product,best_bid, -sell_amount))
-                    left_to_sell = 58 + self.positions[product] - sell_amount
-                    if sell_amount == best_bid_amount:
-                        best_bid, best_bid_amount = buy_orders[1]
-                        test_value = int((best_ask + best_bid) / 2)
-                        orders.append(Order(product,test_value,left_to_sell))
+                flag = 0
+                flag = self.compute_gift_basket_orders(product, state,state.timestamp)
+                if state.timestamp > 300:
+                    logger.print(flag)
+                    if flag == 1:
+                        buy_amount = min(-best_ask_amount, 58 - self.positions['GIFT_BASKET'])
+                        orders.append(Order(product,best_ask, buy_amount))
+                        """left_to_buy = 58 - self.positions[product] - buy_amount
+                        if -best_ask_amount == buy_amount:
+                            best_ask, best_ask_amount = sell_orders[1]
+                            test_value = int((best_ask + best_bid) / 2)
+                            orders.append(Order(product,test_value,left_to_buy))"""
+                    else:
+                        sell_amount = min(best_bid_amount,58 + self.positions[product])
+                        orders.append(Order(product,best_bid, -sell_amount))
+                        """left_to_sell = 58 + self.positions[product] - sell_amount
+                        if sell_amount == best_bid_amount:
+                            best_bid, best_bid_amount = buy_orders[1]
+                            test_value = int((best_ask + best_bid) / 2)
+                            orders.append(Order(product,test_value,left_to_sell))"""
 
                 
                 result[product] = orders
