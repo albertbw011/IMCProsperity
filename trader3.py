@@ -252,60 +252,60 @@ class Trader:
             worst_buy[p] = next(reversed(obuy[p]))
 
             mid_price[p] = (best_sell[p] + best_buy[p])/2
-            vol_buy[p], vol_sell[p] = 0, 0
-            for price, vol in obuy[p].items():
-                vol_buy[p] += vol 
-                if vol_buy[p] >= self.POSITION_LIMIT[p]/10:
-                    break
-            for price, vol in osell[p].items():
-                vol_sell[p] += -vol 
-                if vol_sell[p] >= self.POSITION_LIMIT[p]/10:
-                    break
+            # vol_buy[p], vol_sell[p] = 0, 0
+            # for price, vol in obuy[p].items():
+            #     vol_buy[p] += vol 
+            #     if vol_buy[p] >= self.POSITION_LIMIT[p]/10:
+            #         break
+            # for price, vol in osell[p].items():
+            #     vol_sell[p] += -vol 
+            #     if vol_sell[p] >= self.POSITION_LIMIT[p]/10:
+            #         break
 
         res_buy = mid_price['GIFT_BASKET'] - mid_price['CHOCOLATE']*4 - mid_price['STRAWBERRIES']*6 - mid_price['ROSES'] - 375
         res_sell = mid_price['GIFT_BASKET'] - mid_price['CHOCOLATE']*4 - mid_price['STRAWBERRIES']*6 - mid_price['ROSES'] - 375
 
         trade_at = self.basket_std*0.5
-        close_at = self.basket_std*(-1000)
+        # close_at = self.basket_std*(-1000)
 
-        pb_pos = self.position['GIFT_BASKET']
-        pb_neg = self.position['GIFT_BASKET']
+        # pb_pos = self.position['GIFT_BASKET']
+        # pb_neg = self.position['GIFT_BASKET']
 
-        uku_pos = self.position['ROSES']
-        uku_neg = self.position['ROSES']
+        # uku_pos = self.position['ROSES']
+        # uku_neg = self.position['ROSES']
 
 
-        basket_buy_sig = 0
-        basket_sell_sig = 0
+        # basket_buy_sig = 0
+        # basket_sell_sig = 0
 
-        if self.position['GIFT_BASKET'] == self.POSITION_LIMIT['GIFT_BASKET']:
-            self.cont_buy_basket_unfill = 0
-        if self.position['GIFT_BASKET'] == -self.POSITION_LIMIT['GIFT_BASKET']:
-            self.cont_sell_basket_unfill = 0
+        # if self.position['GIFT_BASKET'] == self.POSITION_LIMIT['GIFT_BASKET']:
+        #     self.cont_buy_basket_unfill = 0
+        # if self.position['GIFT_BASKET'] == -self.POSITION_LIMIT['GIFT_BASKET']:
+        #     self.cont_sell_basket_unfill = 0
 
         do_bask = 0
 
         if res_sell > trade_at:
             vol = self.position['GIFT_BASKET'] + self.POSITION_LIMIT['GIFT_BASKET']
-            self.cont_buy_basket_unfill = 0 # no need to buy rn
-            assert(vol >= 0)
+            # self.cont_buy_basket_unfill = 0 # no need to buy rn
+            # assert(vol >= 0)
             if vol > 0:
-                do_bask = 1
-                basket_sell_sig = 1
-                orders['GIFT_BASKET'].append(Order('GIFT_BASKET', worst_buy['GIFT_BASKET'], -vol)) 
-                self.cont_sell_basket_unfill += 2
-                pb_neg -= vol
+                # do_bask = 1
+                # basket_sell_sig = 1
+                orders['GIFT_BASKET'].append(Order('GIFT_BASKET', worst_buy['GIFT_BASKET'], -int(vol/15))) 
+                # self.cont_sell_basket_unfill += 2
+                #pb_neg -= vol
                 #uku_pos += vol
         elif res_buy < -trade_at:
             vol = self.POSITION_LIMIT['GIFT_BASKET'] - self.position['GIFT_BASKET']
-            self.cont_sell_basket_unfill = 0 # no need to sell rn
-            assert(vol >= 0)
+            # self.cont_sell_basket_unfill = 0 # no need to sell rn
+            # assert(vol >= 0)
             if vol > 0:
-                do_bask = 1
-                basket_buy_sig = 1
-                orders['GIFT_BASKET'].append(Order('GIFT_BASKET', worst_sell['GIFT_BASKET'], vol))
-                self.cont_buy_basket_unfill += 2
-                pb_pos += vol
+                # do_bask = 1
+                # basket_buy_sig = 1
+                orders['GIFT_BASKET'].append(Order('GIFT_BASKET', worst_sell['GIFT_BASKET'], int(vol/15)))
+                # self.cont_buy_basket_unfill += 2
+                #pb_pos += vol
 
         return orders
 
