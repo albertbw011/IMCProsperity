@@ -240,18 +240,21 @@ class Trader:
         orders = {'CHOCOLATE' : [], 'STRAWBERRIES': [], 'ROSES' : [], 'GIFT_BASKET' : []}
         prods = ['CHOCOLATE', 'STRAWBERRIES', 'ROSES', 'GIFT_BASKET']
         osell, obuy, best_sell, best_buy, worst_sell, worst_buy, mid_price, vol_buy, vol_sell = {}, {}, {}, {}, {}, {}, {}, {}, {}
+        coeffs = {'CHOCOLATE' : 0.1142, 'STRAWBERRIES': 0.0583, 'ROSES' : 0.207, 'GIFT_BASKET' : 1}
+        comp = {'CHOCOLATE' : 4, 'STRAWBERRIES': 6, 'ROSES' : 1, 'GIFT_BASKET' : 1}
 
         for p in prods:
             osell[p] = collections.OrderedDict(sorted(order_depth[p].sell_orders.items()))
             obuy[p] = collections.OrderedDict(sorted(order_depth[p].buy_orders.items(), reverse=True))
 
-            best_sell[p] = next(iter(osell[p]))
-            best_buy[p] = next(iter(obuy[p]))
+            best_sell[p] = next(iter(osell[p])) #lowest bot sell price (lowest price we can buy)
+            best_buy[p] = next(iter(obuy[p]))# highed bot buy offers (highest price we can sell at)
 
-            worst_sell[p] = next(reversed(osell[p]))
-            worst_buy[p] = next(reversed(obuy[p]))
+            worst_sell[p] = next(reversed(osell[p]))# highest bots sell order
+            worst_buy[p] = next(reversed(obuy[p]))# lowest bot buy offer (lowest price we can sell at)
 
             mid_price[p] = (best_sell[p] + best_buy[p])/2
+            # mid_price[p] = self.calculate_weighted_price(order_depth[p])
             # vol_buy[p], vol_sell[p] = 0, 0
             # for price, vol in obuy[p].items():
             #     vol_buy[p] += vol 
@@ -284,28 +287,54 @@ class Trader:
         #     self.cont_sell_basket_unfill = 0
 
         do_bask = 0
+        # self.calculate_weighted_price(order_depth)
 
-        if res_sell > trade_at:
+        if res_sell > trade_at: #sell high
             vol = self.position['GIFT_BASKET'] + self.POSITION_LIMIT['GIFT_BASKET']
+            # self.position['GIFT_BASKET'] -= int(vol/10)
             # self.cont_buy_basket_unfill = 0 # no need to buy rn
             # assert(vol >= 0)
             if vol > 0:
                 # do_bask = 1
                 # basket_sell_sig = 1
-                orders['GIFT_BASKET'].append(Order('GIFT_BASKET', worst_buy['GIFT_BASKET'], -int(vol/15))) 
+                orders['GIFT_BASKET'].append(Order('GIFT_BASKET', worst_buy['GIFT_BASKET'], -int(vol/15)))
+                # orders['CHOCOLATE'].append(Order('CHOCOLATE', worst_sell['CHOCOLATE'], 4*int(vol/15))) 
+                # orders['STRAWBERRIES'].append(Order('STRAWBERRIES', worst_sell['STRAWBERRIES'], 6*int(vol/15))) 
+                # orders['ROSES'].append(Order('ROSES', worst_sell['ROSES'], int(vol/15)))
+    
                 # self.cont_sell_basket_unfill += 2
                 #pb_neg -= vol
                 #uku_pos += vol
         elif res_buy < -trade_at:
             vol = self.POSITION_LIMIT['GIFT_BASKET'] - self.position['GIFT_BASKET']
+            # print('gift')
+            # print(self.postio)
+            # self.position['GIFT_BASKET'] += int(vol/10)
             # self.cont_sell_basket_unfill = 0 # no need to sell rn
             # assert(vol >= 0)
             if vol > 0:
                 # do_bask = 1
                 # basket_buy_sig = 1
                 orders['GIFT_BASKET'].append(Order('GIFT_BASKET', worst_sell['GIFT_BASKET'], int(vol/15)))
+                # orders['CHOCOLATE'].append(Order('CHOCOLATE', worst_buy['CHOCOLATE'], -4*int(vol/15))) 
+                # orders['STRAWBERRIES'].append(Order('STRAWBERRIES', worst_buy['STRAWBERRIES'], -6*int(vol/15))) 
+                # orders['ROSES'].append(Order('ROSES', worst_buy['ROSES'], -int(vol/15)))
+                
                 # self.cont_buy_basket_unfill += 2
                 #pb_pos += vol
+        # for product in prods:
+        #     if product != 'GIFT_BASKETS':
+        #         expected_price = coeffs[product]*(mid_price[product]-375)
+        #         if mid_price[product] < expected_price:
+        #             vol = 2*self.POSITION_LIMIT[product]
+        #             orders[product].append(Order(product, worst_sell[product], comp[product]*int(vol/15)))
+        # for product in prods:
+        #     if product != 'GIFT_BASKETS':
+        #         expected_price = coeffs[product]*(mid_price[product]-375)
+        #         if mid_price[product] > expected_price*1.02:
+        #             vol = 2*self.POSITION_LIMIT[product]
+        #             orders[product].append(Order(product, worst_buy[product], -comp[product]*int(vol/15)))
+
 
         return orders
 
@@ -561,8 +590,8 @@ class Trader:
                 #else:
                 if best_bid+2 > import_price:
                     orders.append(Order(product,best_bid+2, -100))
-                    if state.timestamp > 0:
-                        conversions = -self.positions['ORCHIDS']
+                if state.timestamp > 0:
+                    conversions = -self.positions['ORCHIDS']    
                 result[product] = orders 
                 # orders: list[Order] = []
                 # order_depth = state.order_depths['ORCHIDS']
@@ -624,6 +653,9 @@ class Trader:
                 # # self.determine_trend('SUNLIGHT', self.orchids_stats['SUNLIGHT'], 10)
 
                 # result[product] = orders
+        products = ['CHOCOLATE', 'STRAWBERRIES', 'ROSES', 'GIFT_BASKET']
+        for product in products:
+            self.positions[product] = state.position.get(product,0)
         
         orders = self.compute_orders_basket2(state.order_depths)
         if len(orders['GIFT_BASKET']) != 0:
