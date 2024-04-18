@@ -186,8 +186,8 @@ class Trader:
         strawberries = "STRAWBERRIES"
         roses = "ROSES"
         gift_basket = "GIFT_BASKET"
-        etf_premium = 380
-        threshold = 52
+        etf_premium = 386
+        threshold = 76/2
         orders = {
             chocolate: [],
             strawberries: [],
@@ -217,10 +217,6 @@ class Trader:
         self.basket_price_log['COMBINED'].append(combined_price)
         self.basket_price_log['BASKET'].append(prices[gift_basket])
         self.basket_price_log['DELTA'].append(price_diff)
-        self.positions[chocolate] = state.position.get(chocolate, 0)
-        self.positions[strawberries] = state.position.get(strawberries, 0)
-        self.positions[roses] = state.position.get(roses, 0)
-        self.positions[gift_basket] = state.position.get(gift_basket, 0)
         period = 2
         
         if len(self.basket_price_log['BASKET']) >= period:
