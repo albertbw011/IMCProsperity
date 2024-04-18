@@ -187,7 +187,7 @@ class Trader:
         roses = "ROSES"
         gift_basket = "GIFT_BASKET"
         etf_premium = 380
-        threshold = 75
+        threshold = 52
         orders = {
             chocolate: [],
             strawberries: [],
@@ -202,7 +202,7 @@ class Trader:
             gift_basket: self.calculate_weighted_price(order_depth[gift_basket])
         }
 
-        zero = -1
+        zero = 0
         best_ask_chocolate, best_ask_amount_chocolate = list(order_depth[chocolate].sell_orders.items())[zero]
         best_ask_strawberries, best_ask_amount_strawberries = list(order_depth[strawberries].sell_orders.items())[zero]
         best_ask_roses, best_ask_amount_roses = list(order_depth[roses].sell_orders.items())[zero]
@@ -229,21 +229,11 @@ class Trader:
             if delta_curr < etf_premium - threshold:
                 # should be positive
                 units = min(best_bid_amount_chocolate//4, best_bid_amount_strawberries//6, best_bid_amount_roses, -best_ask_amount_gift)
-                # short individual products
-                #orders[chocolate].append(Order(chocolate, best_bid_chocolate, -4*units))
-                #orders[strawberries].append(Order(strawberries, best_bid_strawberries, -6*units))
-                #orders[roses].append(Order(roses, best_bid_roses, -units))
-
                 # long etf
                 orders[gift_basket].append(Order(gift_basket, best_ask_gift, units))
             elif delta_curr > etf_premium + threshold:
                 # positive
                 units = min(-best_ask_amount_chocolate//4, -best_ask_amount_strawberries//6, -best_ask_amount_roses, best_bid_amount_gift)
-                # long individual products
-                #orders[chocolate].append(Order(chocolate, best_ask_chocolate, 4*units))
-                #orders[strawberries].append(Order(strawberries, best_ask_strawberries, 6*units))
-                #orders[roses].append(Order(roses, best_ask_roses, units))
-
                 # short etf
                 orders[gift_basket].append(Order(gift_basket, best_bid_gift, -units))
 
@@ -251,21 +241,11 @@ class Trader:
             if self.basket_price_log['DELTA'][-1] < etf_premium - threshold:
                 # positive
                 units = min(best_bid_amount_chocolate//4, best_bid_amount_strawberries//6, best_bid_amount_roses, -best_ask_amount_gift)
-                # short individual products
-                #orders[chocolate].append(Order(chocolate, best_bid_chocolate, -4*units))
-                #orders[strawberries].append(Order(strawberries, best_bid_strawberries, -6*units))
-                #orders[roses].append(Order(roses, best_bid_roses, -units))
-
                 # long etf
                 orders[gift_basket].append(Order(gift_basket, best_ask_gift, units))
             elif self.basket_price_log['DELTA'][-1] > etf_premium + threshold:
                 # positive
                 units = min(-best_ask_amount_chocolate//4, -best_ask_amount_strawberries//6, -best_ask_amount_roses, best_bid_amount_gift)
-                # long individual products
-                #orders[chocolate].append(Order(chocolate, best_ask_chocolate, 4*units))
-                #orders[strawberries].append(Order(strawberries, best_ask_strawberries, 6*units))
-                #orders[roses].append(Order(roses, best_ask_roses, units))
-
                 # short etf
                 orders[gift_basket].append(Order(gift_basket, best_bid_gift, -units))
 
@@ -275,7 +255,7 @@ class Trader:
         result = {}
         conversions = 0
         
-        """for product in state.order_depths:
+        for product in state.order_depths:
             
             if product == 'ORCHIDS':
                 order_depth: OrderDepth = state.order_depths[product]
@@ -294,14 +274,14 @@ class Trader:
                 import_price = orchids_observation.askPrice + orchids_observation.importTariff + orchids_observation.transportFees
                 export_price = orchids_observation.bidPrice + orchids_observation.exportTariff + orchids_observation.transportFees
 
-                if orchids_observation.importTariff >= -2:
-                    orders.append(Order(product, best_bid+2, -100))
-                    if state.timestamp > 0 and import_price < best_ask:
-                        conversions = -self.positions[product]
+                if best_bid + 2 < import_price:
+                    acc_price = round(import_price + 1)
                 else:
-                    continue
-       
-                #result[product] = orders            
+                    acc_price = best_bid + 2
+                orders.append(Order(product,acc_price, -100))
+                if state.timestamp > 0:
+                    conversions = -self.positions['ORCHIDS']
+                result[product] = orders          
                 
             elif product == 'AMETHYSTS':  
                 order_depth: OrderDepth = state.order_depths[product]
@@ -424,7 +404,7 @@ class Trader:
                     #logger.print("MAKING SELL", str(left_to_sell) + "x", best_ask-1)
                     orders.append(Order(product,best_ask-1,-left_to_sell))
        
-                result[product] = orders"""
+                result[product] = orders
 
         # orders for gift basket
         basket_orders = self.calculate_basket(state)
