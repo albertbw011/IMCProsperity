@@ -122,16 +122,16 @@ def def_value():
 INF = int(1e9)
 
 class Trader:
-    positions = {'AMETHYSTS': 0, 'STARFRUIT': 0, 'ORCHIDS': 0, 'CHOCOLATE' : 0, 'STRAWBERRIES': 0, 'ROSES' : 0, 'GIFT_BASKET' : 0}
-    position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20, 'ORCHIDS': 100, 'CHOCOLATE' : 250, 'STRAWBERRIES': 350, 'ROSES' : 60, 'GIFT_BASKET' : 60}
-    mid_price_log = {'STARFRUIT': [], 'ORCHIDS' : [], 'CHOCOLATE' : [], 'STRAWBERRIES': [], 'ROSES' : [], 'GIFT_BASKET' : []}
+    positions = {'AMETHYSTS': 0, 'STARFRUIT': 0, 'ORCHIDS': 0, 'CHOCOLATE' : 0, 'STRAWBERRIES': 0, 'ROSES' : 0, 'GIFT_BASKET' : 0, 'COCONUT': 0, 'COCONUT_COUPON': 0}
+    position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20, 'ORCHIDS': 100, 'CHOCOLATE' : 250, 'STRAWBERRIES': 350, 'ROSES' : 60, 'GIFT_BASKET' : 60, 'COCONUT': 300, 'COCONUT_COUPON': 600}
+    mid_price_log = {'STARFRUIT': [], 'ORCHIDS' : [], 'CHOCOLATE' : [], 'STRAWBERRIES': [], 'ROSES' : [], 'GIFT_BASKET' : [], 'COCONUT': [], 'COCONUT_COUPON': []}
     price_log = {'STARFRUIT':[], 'ORCHIDS' : []}
     orchids_stats = {'SUNLIGHT' : [], 'HUMIDITY': [], 'EXPORT TARIFFS': [], 'IMPORT TARIFFS': [], 'SHIPPING COSTS': []}
     trending = {'SUNLIGHT' : 0, 'HUMIDITY' : 0}
 
 
     position = copy.deepcopy(empty_dict)
-    POSITION_LIMIT = {'AMETHYSTS': 20, 'STARFRUIT': 20, 'ORCHIDS': 100, 'CHOCOLATE' : 250, 'STRAWBERRIES': 350, 'ROSES' : 60, 'GIFT_BASKET' : 60}
+    POSITION_LIMIT = {'AMETHYSTS': 20, 'STARFRUIT': 20, 'ORCHIDS': 100, 'CHOCOLATE' : 250, 'STRAWBERRIES': 350, 'ROSES' : 60, 'GIFT_BASKET' : 60, 'COCONUT': 300, 'COCONUT_COUPON': 600}
     volume_traded = copy.deepcopy(empty_dict)
 
     person_position = collections.defaultdict(def_value)
@@ -154,6 +154,7 @@ class Trader:
     first_berries = 0
     cont_buy_basket_unfill = 0
     cont_sell_basket_unfill = 0
+    implied_vol = 0
     
     halflife_diff = 5
     alpha_diff = 1 - np.exp(-np.log(2)/halflife_diff)
@@ -235,6 +236,123 @@ class Trader:
     #         self.trending = -1
     #     else:
     #         self.trending = 0
+
+    def implied_volatility(self, S, K, T, r, option_price, option_type, sigma_initial=0.2, tolerance=1e-6, max_iterations=100):
+        """
+        Calculate implied volatility using Newton-Raphson method.
+        """
+        sigma = sigma_initial
+        for i in range(max_iterations):
+            price = self.black_scholes(S, K, T, r, sigma, option_type)
+            vega = self.vega_black_scholes(S, K, T, r, sigma, option_type)
+            sigma_new = sigma - (price - option_price) / vega
+            
+            if abs(sigma_new - sigma) < tolerance:
+                return sigma_new
+            
+            sigma = sigma_new
+        
+        raise ValueError("Failed to converge after maximum iterations")
+
+    def vega_black_scholes(self, S, K, T, r, sigma, option_type):
+        """
+        Calculate Vega for the Black-Scholes formula.
+        """
+        d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+        vega = S * np.sqrt(T) * math.exp(-0.5 * d1 ** 2) / np.sqrt(2 * np.pi)
+        
+        if option_type == 'put':
+            vega = -vega
+        
+        return vega
+    
+    def black_scholes(self, S, K, T, r, sigma, option_type):
+        """
+        Calculate option price using Black-Scholes model.
+        """
+        d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+        d2 = d1 - sigma * np.sqrt(T)
+        
+        if option_type == 'call':
+            N_d1 = 0.5 * (1 + math.erf(d1 / np.sqrt(2)))
+            N_d2 = 0.5 * (1 + math.erf(d2 / np.sqrt(2)))
+            option_price = S * N_d1 - K * np.exp(-r * T) * N_d2
+        elif option_type == 'put':
+            N_d1 = 0.5 * (1 - math.erf(d1 / np.sqrt(2)))
+            N_d2 = 0.5 * (1 - math.erf(d2 / np.sqrt(2)))
+            option_price = K * np.exp(-r * T) * N_d2 - S * N_d1
+        else:
+            raise ValueError("Option type must be 'call' or 'put'")
+        
+        return option_price
+
+    def compute_orders_coconuts(self, order_depth):
+        orders = {'COCONUT': [], 'COCONUT_COUPON': []}
+        coconut_asks = collections.OrderedDict(sorted(order_depth['COCONUT'].sell_orders.items()))
+        coconut_bids = collections.OrderedDict(sorted(order_depth['COCONUT'].buy_orders.items()))
+        coupon_asks = collections.OrderedDict(sorted(order_depth['COCONUT_COUPON'].sell_orders.items()))
+        coupon_bids = collections.OrderedDict(sorted(order_depth['COCONUT_COUPON'].buy_orders.items()))
+
+        self.mid_price_log['COCONUT'].append(self.calculate_weighted_price(order_depth['COCONUT']))
+        self.mid_price_log['COCONUT_COUPON'].append(self.calculate_weighted_price(order_depth['COCONUT_COUPON']))
+
+        print(collections.OrderedDict(sorted(order_depth['COCONUT_COUPON'].sell_orders.items())))
+        print(collections.OrderedDict(sorted(order_depth['COCONUT_COUPON'].buy_orders.items())))
+
+        coconut_price = self.mid_price_log['COCONUT'][-1]  # Current price of COCONUT
+        coupon_price = self.mid_price_log['COCONUT_COUPON'][0]
+        strike_price = 10000  # Strike price of COCONUT_COUPON
+        time_to_maturity = 250 / 365  # Time to maturity in years (250 trading days)
+        risk_free_rate = 0  # Risk-free interest rate (proportional)
+        volatility = 0.25  # Volatility of COCONUT
+
+        # Position limits
+        coconut_position_limit = self.position_limit['COCONUT']
+        coupon_position_limit = self.position_limit['COCONUT_COUPON']
+
+        # Bid/ask data
+        # coconut_bids = {9900: 50, 9950: 100}
+        # coconut_asks = {10050: 80, 10100: 60}
+        # coupon_bids = {100: 200, 150: 150}
+        # coupon_asks = {200: 180, 250: 120}
+
+        # Trading algorithm
+        implied_vol = self.implied_volatility(coconut_price, strike_price, time_to_maturity, risk_free_rate, self.mid_price_log['COCONUT_COUPON'][-1], 'call')
+        self.implied_vol = implied_vol
+
+        # implied_vol = 0.166
+        fair_coupon_price = self.black_scholes(coconut_price, strike_price, time_to_maturity, risk_free_rate, self.implied_vol, 'call')
+        print(fair_coupon_price)
+
+        print('bert1')
+        print(len(coupon_bids.keys()))
+        #print(min(coupon_bids.keys()))
+        if len(coupon_asks.keys()) != 0 and fair_coupon_price > max(coupon_asks.keys()):
+            # Sell COCONUT_COUPON
+            print('bert2')
+            ask_price, ask_volume = sorted(coupon_asks.items(), reverse=True)[0]
+            if self.positions['COCONUT_COUPON'] > -self.position_limit['COCONUT_COUPON']:
+                trade_volume = min(-self.position_limit['COCONUT_COUPON'] - self.positions['COCONUT_COUPON'], ask_volume)
+                print(ask_volume)
+                if trade_volume < 0:
+                    print(f"Sell {trade_volume} COCONUT_COUPON at {ask_price}")
+                    orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON', ask_price, trade_volume))
+                    print('bert4')
+                    self.positions['COCONUT_COUPON'] -= trade_volume
+
+        elif len(coupon_bids.keys()) != 0 and fair_coupon_price < min(coupon_bids.keys()):
+            # Buy COCONUT_COUPON
+            print('bert2')
+            bid_price, bid_volume = sorted(coupon_bids.items())[0]
+            trade_volume = min(self.position_limit['COCONUT_COUPON'] - self.positions['COCONUT_COUPON'], bid_volume)
+            if self.positions['COCONUT_COUPON'] < self.position_limit['COCONUT_COUPON']:
+                if trade_volume > 0:
+                    print('bert5')
+                    print(f"Buy {trade_volume} COCONUT_COUPON at {bid_price}")
+                    orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON', bid_price, trade_volume))
+                    self.positions['COCONUT_COUPON'] += trade_volume
+        return orders
+
     def compute_orders_basket2(self, order_depth):
 
         orders = {'CHOCOLATE' : [], 'STRAWBERRIES': [], 'ROSES' : [], 'GIFT_BASKET' : []}
@@ -666,6 +784,13 @@ class Trader:
                 # # self.determine_trend('SUNLIGHT', self.orchids_stats['SUNLIGHT'], 10)
 
                 # result[product] = orders
+
+        self.positions['COCONUT'] = state.position.get('COCONUT',0)
+        self.positions['COCONUT_COUPON'] = state.position.get('COCONUT_COUPON',0)
+        orders = self.compute_orders_coconuts(state.order_depths)
+        result['COCONUT'] = orders['COCONUT']
+        result['COCONUT_COUPON'] = orders['COCONUT_COUPON']
+
         # products = ['CHOCOLATE', 'STRAWBERRIES', 'ROSES', 'GIFT_BASKET']
         # for product in products:
         #     self.positions[product] = state.position.get(product,0)
