@@ -240,7 +240,7 @@ class Trader:
         orders = {'CHOCOLATE' : [], 'STRAWBERRIES': [], 'ROSES' : [], 'GIFT_BASKET' : []}
         prods = ['CHOCOLATE', 'STRAWBERRIES', 'ROSES', 'GIFT_BASKET']
         osell, obuy, best_sell, best_buy, worst_sell, worst_buy, mid_price, vol_buy, vol_sell = {}, {}, {}, {}, {}, {}, {}, {}, {}
-        coeffs = {'CHOCOLATE' : 0.1142, 'STRAWBERRIES': 0.0583, 'ROSES' : 0.207, 'GIFT_BASKET' : 1}
+        coeffs = {'CHOCOLATE' : 0.1118, 'STRAWBERRIES': 0.0533, 'ROSES' : 0.207, 'GIFT_BASKET' : 1}
         comp = {'CHOCOLATE' : 4, 'STRAWBERRIES': 6, 'ROSES' : 1, 'GIFT_BASKET' : 1}
 
         for p in prods:
@@ -254,6 +254,7 @@ class Trader:
             worst_buy[p] = next(reversed(obuy[p]))# lowest bot buy offer (lowest price we can sell at)
 
             mid_price[p] = (best_sell[p] + best_buy[p])/2
+            self.mid_price_log[p].append(mid_price[p])
             # mid_price[p] = self.calculate_weighted_price(order_depth[p])
             # vol_buy[p], vol_sell[p] = 0, 0
             # for price, vol in obuy[p].items():
@@ -322,18 +323,27 @@ class Trader:
                 
                 # self.cont_buy_basket_unfill += 2
                 #pb_pos += vol
-        # for product in prods:
-        #     if product != 'GIFT_BASKETS':
-        #         expected_price = coeffs[product]*(mid_price[product]-375)
-        #         if mid_price[product] < expected_price:
-        #             vol = 2*self.POSITION_LIMIT[product]
-        #             orders[product].append(Order(product, worst_sell[product], comp[product]*int(vol/15)))
-        # for product in prods:
-        #     if product != 'GIFT_BASKETS':
-        #         expected_price = coeffs[product]*(mid_price[product]-375)
-        #         if mid_price[product] > expected_price*1.02:
-        #             vol = 2*self.POSITION_LIMIT[product]
-        #             orders[product].append(Order(product, worst_buy[product], -comp[product]*int(vol/15)))
+        if(len(self.mid_price_log['GIFT_BASKET'])) >= 500:
+            for product in prods:
+                if product != 'GIFT_BASKET':
+                    expected_price = coeffs[product]*(mid_price['GIFT_BASKET']-375)
+                    cof = sum(self.mid_price_log[product])/len(self.mid_price_log[product])
+                    g_cof = (sum(self.mid_price_log['GIFT_BASKET']) - 375*len(self.mid_price_log['GIFT_BASKET']))/len(self.mid_price_log['GIFT_BASKET'])
+                    expected_price = (cof/g_cof)*(mid_price['GIFT_BASKET']-375)
+                    if mid_price[product] < expected_price*0.985:
+                        vol = 2*self.POSITION_LIMIT[product]
+                        orders[product].append(Order(product, worst_sell[product], comp[product]*int(vol/15)))
+            for product in prods:
+                if product != 'GIFT_BASKET':
+                    expected_price = coeffs[product]*(mid_price['GIFT_BASKET']-375)
+                    cof = sum(self.mid_price_log[product])/len(self.mid_price_log[product])
+                    g_cof = (sum(self.mid_price_log['GIFT_BASKET']) - 375*len(self.mid_price_log['GIFT_BASKET']))/len(self.mid_price_log['GIFT_BASKET'])
+                    expected_price = (cof/g_cof)*(mid_price['GIFT_BASKET']-375)
+                    print('ex price')
+                    print(expected_price)
+                    if mid_price[product] > expected_price*1.015:
+                        vol = 2*self.POSITION_LIMIT[product]
+                        orders[product].append(Order(product, worst_buy[product], -comp[product]*int(vol/15)))
 
 
         return orders
@@ -588,11 +598,14 @@ class Trader:
                 #if best_ask - best_bid < 7:
                     #orders.append(Order(product,best_bid+1, -100))
                 #else:
-                if best_bid+2 > import_price:
-                    orders.append(Order(product,best_bid+2, -100))
+                if best_bid + 2 < import_price:
+                    acc_price = round(import_price + 1)
+                else:
+                    acc_price = best_bid + 2
+                orders.append(Order(product,acc_price, -100))
                 if state.timestamp > 0:
-                    conversions = -self.positions['ORCHIDS']    
-                result[product] = orders 
+                    conversions = -self.positions['ORCHIDS']
+                result[product] = orders
                 # orders: list[Order] = []
                 # order_depth = state.order_depths['ORCHIDS']
                 # self.positions['ORCHIDS'] = state.position.get(product,0)
@@ -653,17 +666,17 @@ class Trader:
                 # # self.determine_trend('SUNLIGHT', self.orchids_stats['SUNLIGHT'], 10)
 
                 # result[product] = orders
-        products = ['CHOCOLATE', 'STRAWBERRIES', 'ROSES', 'GIFT_BASKET']
-        for product in products:
-            self.positions[product] = state.position.get(product,0)
+        # products = ['CHOCOLATE', 'STRAWBERRIES', 'ROSES', 'GIFT_BASKET']
+        # for product in products:
+        #     self.positions[product] = state.position.get(product,0)
         
-        orders = self.compute_orders_basket2(state.order_depths)
-        if len(orders['GIFT_BASKET']) != 0:
-            print('bert3')
-            result['GIFT_BASKET'] = orders['GIFT_BASKET']
-        result['CHOCOLATE'] = orders['CHOCOLATE']
-        result['STRAWBERRIES'] = orders['STRAWBERRIES']
-        result['ROSES'] = orders['ROSES']
+        # orders = self.compute_orders_basket2(state.order_depths)
+        # if len(orders['GIFT_BASKET']) != 0:
+        #     print('bert3')
+        #     result['GIFT_BASKET'] = orders['GIFT_BASKET']
+        # result['CHOCOLATE'] = orders['CHOCOLATE']
+        # result['STRAWBERRIES'] = orders['STRAWBERRIES']
+        # result['ROSES'] = orders['ROSES']
 
                      
         traderData = "SAMPLE" # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
