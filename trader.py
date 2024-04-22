@@ -114,8 +114,8 @@ class Logger:
 logger = Logger()
 
 class Trader:
-    positions = {'AMETHYSTS': 0, 'STARFRUIT': 0,'ORCHIDS': 0, 'GIFT_BASKET': 0, 'CHOCOLATE': 0, 'STRAWBERRIES': 0, 'ROSES': 0}
-    position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20,'ORCHIDS': 100, 'GIFT_BASKET': 60, 'CHOCOLATE': 250, 'STRAWBERRIES': 360, 'ROSES': 60}
+    positions = {'AMETHYSTS': 0, 'STARFRUIT': 0,'ORCHIDS': 0, 'GIFT_BASKET': 0, 'CHOCOLATE': 0, 'STRAWBERRIES': 0, 'ROSES': 0, 'COCONUTS': 0, 'COCONUT_COUPON': 0}
+    position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20,'ORCHIDS': 100, 'GIFT_BASKET': 60, 'CHOCOLATE': 250, 'STRAWBERRIES': 360, 'ROSES': 60, 'COCONUTS': 300, 'COCONUT_COUPON': 600}
     starfruit_mid_price_log = {'STARFRUIT': []}
     starfruit_price_log = {'STARFRUIT':[]}
     baskets_mp = {'GB' : [],'CHOC' :[], 'STRAW': [], 'ROSE': [], 'SUM': []}
@@ -124,27 +124,16 @@ class Trader:
         '''
         Calculate the weighted moving average price for the specified item over the specified period.
         '''
-
-        # Check if the item exists in the starfruit_mid_price_log dictionary 
-        # and has enough entries to calculate the moving average for the given period.
         if item in self.starfruit_mid_price_log and len(self.starfruit_mid_price_log[item]) >= period:
 
-            # Extract the last 'period' number of prices for the specified item.
             prices = self.starfruit_mid_price_log[item][-period:]
             
-            # Generate a range of weights, it is linear in this case.
             weights = range(1, period + 1)
             
-            # Calculate the weighted sum of the prices. This is done by multiplying each price by its corresponding weight
-            # and then summing up the results. This step emphasizes more recent prices by assigning them higher weights.
             weighted_sum = sum(price * weight for price, weight in zip(prices, weights))
             
-            # Calculate the total weight by summing up all the weights.
             total_weight = sum(weights)
             
-            # Calculate and return the weighted average price. This is the weighted sum divided by the total weight.
-            # This results in an average where more recent prices have a greater influence than older prices.
-            #return weighted_sum / total_weight
             coef = [0.346080, 0.262699 ,0.195654, 0.192134]
             intercept = 17.36839
             price = intercept + self.starfruit_mid_price_log[item][-4] * coef[0] + self.starfruit_mid_price_log[item][-3] * coef[1] + self.starfruit_mid_price_log[item][-2] * coef[2] + self.starfruit_mid_price_log[item][-1] * coef[3]
@@ -156,7 +145,57 @@ class Trader:
         total_sum = sum(self.baskets_mp[product][-period:])
         return total_sum/period
         
+    def compute_order_coconuts(self, order_depth, timestamp):
+        orders = []
+        coupon_asks = list(order_depth['COCONUT_COUPON'].sell_orders.items())
+        coupon_bids = list(order_depth['COCONUT_COUPON'].buy_orders.items())
+        coconut_asks = list(order_depth['COCONUT'].sell_orders.items())
+        coconut_bids = list(order_depth['COCONUT'].buy_orders.items())
+        
+        stock_price = (coconut_asks[0][0] + coconut_bids[0][0])/2
+        strike_price = 10000 #price the call option can be executed at
+        time_to_expiration = (249 - timestamp/1000000)/365 #time till expiration in years
+        risk_free_rate = 0 #no banks on the island
+        sigma = 0.19332951334290546 #calculated using premium on day 1 timestamp 1, might need to check this
+        
+        fair_price = self.black_scholes_price(stock_price,strike_price,time_to_expiration, risk_free_rate,sigma)
+        logger.print(fair_price)
+        bought_amount = 0
+        sold_amount = 0
+        
+        if len(coupon_asks) != 0:
+            if fair_price > coupon_asks[0][0]:
+                ask_price, ask_volume = coupon_asks[0]
+                if self.positions['COCONUT_COUPON'] < self.position_limit['COCONUT_COUPON']:
+                    buy_amount = min(self.position_limit['COCONUT_COUPON'] - self.positions['COCONUT_COUPON'],-ask_volume)
+                    orders.append(Order('COCONUT_COUPON',ask_price, buy_amount))
+                    self.positions['COCONUT_COUPON'] += buy_amount
+                    bought_amount += buy_amount
 
+        if len(coupon_bids) != 0:
+            if fair_price < coupon_bids[0][0]:
+                bid_price, bid_volume = coupon_bids[0]
+                if self.positions['COCONUT_COUPON'] > -self.position_limit['COCONUT_COUPON']:
+                    sell_amount = min(self.positions['COCONUT_COUPON'] + self.position_limit['COCONUT_COUPON'], bid_volume)
+                    logger.print("SELL", str(sell_amount) + "x", bid_price)
+                    orders.append(Order('COCONUT_COUPON',bid_price,-sell_amount))
+                    self.positions['COCONUT_COUPON'] -= sell_amount
+                    sold_amount -= sell_amount
+        
+        #can try market making, not sure if bots will take, spread is also very small, nearly 0
+                
+        return orders    
+        
+    
+    def black_scholes_price(self,S,K,T,r,sigma):
+        d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+        d2 = d1 - sigma * np.sqrt(T)
+        call_price = S * self.phi(d1) - K * np.exp(-r * T) * self.phi(d2)
+        return call_price
+    def phi(self,x):
+    #'Cumulative distribution function for the standard normal distribution'
+        return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0    
+        
     
     def calculate_weighted_price(self, order_depth):
         weighted_bid = 0
@@ -290,30 +329,18 @@ class Trader:
                 # Append weighted price to mid-price log to calculate MA
                 self.starfruit_mid_price_log['STARFRUIT'].append(acceptable_price)
                 window = 4
-                #if len(self.starfruit_mid_price_log['STARFRUIT']) > window:
-                    #acceptable_price = self.moving_average('STARFRUIT', window)
+                if len(self.starfruit_mid_price_log['STARFRUIT']) > window:
+                    acceptable_price = self.moving_average('STARFRUIT', window)
                 
                 if len(order_depth.sell_orders) != 0:
                     best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
                     if self.positions[product] < self.position_limit[product]:
-                        #i = 0
-                        #i = 0
                         if int(best_ask) < acceptable_price:
                             buy_amount = min(self.position_limit[product] - self.positions[product],-best_ask_amount)
                             logger.print("BUY", str(buy_amount) + "x", best_ask)
                             orders.append(Order(product,best_ask,buy_amount))
                             self.positions[product] += buy_amount
                             bought_amount += buy_amount
-                            # i = i+1
-                            # if i < len(list(order_depth.sell_orders.items())):
-                            #     best_ask, best_ask_amount = list(order_depth.sell_orders.items())[i]
-                            # else:
-                            #     break
-                            # i = i+1
-                            # if i < len(list(order_depth.sell_orders.items())):
-                            #     best_ask, best_ask_amount = list(order_depth.sell_orders.items())[i]
-                            # else:
-                            #     break
                 if len(order_depth.buy_orders) != 0:
                     best_bid, best_bid_amount = list(order_depth.buy_orders.items())[0]
                     if self.positions[product] > -self.position_limit[product]:
@@ -354,48 +381,21 @@ class Trader:
                 logger.print(import_price)
                 #selling at best bid
                 #want to buy back for lower
-                #if best_ask - best_bid < 7:
-                    #orders.append(Order(product,best_bid+1, -100))
-                #else:
-                if best_bid+2 > import_price:
-                    orders.append(Order(product,best_bid+2, -100))
-                    if state.timestamp > 0:
-                        conversions = -self.positions['ORCHIDS']
+                if best_bid + 2 < import_price:
+                    acc_price = round(import_price + 1)
+                else:
+                    acc_price = best_bid + 2
+                orders.append(Order(product,acc_price, -100))
+                if state.timestamp > 0:
+                    conversions = -self.positions['ORCHIDS']
                 result[product] = orders
-            elif product == 'GIFT_BASKET':
+            elif product == 'COCONUT_COUPON': 
                 orders: list[Order] = []
-                order_depth = state.order_depths[product]
-                self.positions['GIFT_BASKET'] = state.position.get(product,0)
-                buy_orders = list(order_depth.buy_orders.items())
-                buy_orders.sort(key = lambda x:x[0], reverse = True)
-                sell_orders = list(order_depth.sell_orders.items())
-                sell_orders.sort(key = lambda x: x[0])
-                best_bid, best_bid_amount = buy_orders[0]
-                best_ask, best_ask_amount = sell_orders[0]
-                flag = 0
-                flag = self.compute_gift_basket_orders(product, state,state.timestamp)
-                if state.timestamp > 300:
-                    logger.print(flag)
-                    if flag == 1:
-                        buy_amount = min(-best_ask_amount, 58 - self.positions['GIFT_BASKET'])
-                        orders.append(Order(product,best_ask, buy_amount))
-                        """left_to_buy = 58 - self.positions[product] - buy_amount
-                        if -best_ask_amount == buy_amount:
-                            best_ask, best_ask_amount = sell_orders[1]
-                            test_value = int((best_ask + best_bid) / 2)
-                            orders.append(Order(product,test_value,left_to_buy))"""
-                    else:
-                        sell_amount = min(best_bid_amount,58 + self.positions[product])
-                        orders.append(Order(product,best_bid, -sell_amount))
-                        """left_to_sell = 58 + self.positions[product] - sell_amount
-                        if sell_amount == best_bid_amount:
-                            best_bid, best_bid_amount = buy_orders[1]
-                            test_value = int((best_ask + best_bid) / 2)
-                            orders.append(Order(product,test_value,left_to_sell))"""
-
-                
+                #order_depth = state.order_depths[product]
+                self.positions['COCONUT_COUPON'] = state.position.get('COCONUT_COUPON',0)
+                orders = self.compute_order_coconuts(state.order_depths,state.timestamp)
                 result[product] = orders
-                    
+                   
                 
                 
                             
