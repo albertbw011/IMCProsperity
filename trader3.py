@@ -128,6 +128,7 @@ class Trader:
     price_log = {'STARFRUIT':[], 'ORCHIDS' : []}
     orchids_stats = {'SUNLIGHT' : [], 'HUMIDITY': [], 'EXPORT TARIFFS': [], 'IMPORT TARIFFS': [], 'SHIPPING COSTS': []}
     trending = {'SUNLIGHT' : 0, 'HUMIDITY' : 0}
+    basket_price_log = {'COMBINED': [], 'BASKET': [], 'DELTA': []}
 
 
     position = copy.deepcopy(empty_dict)
@@ -210,6 +211,12 @@ class Trader:
             
             return None
         
+    def moving_average_list(self, item, period):
+        if len(item) >= period:
+            prices = item[-period:]
+            sum_prices = sum(prices)
+            return sum_prices / period
+        
     # def calculate_slope(self, datapts, period):
         
     #     # Ensure that the period is valid
@@ -288,172 +295,231 @@ class Trader:
         
         return option_price
 
-    def compute_orders_coconuts(self, order_depth, timestamp, hedging_interval=1):
-        orders = {'COCONUT': [], 'COCONUT_COUPON': []}
+    # def compute_orders_coconuts(self, order_depth, timestamp, hedging_interval=2000):
+    #     orders = {'COCONUT': [], 'COCONUT_COUPON': []}
 
+    #     coupon_asks = list(order_depth['COCONUT_COUPON'].sell_orders.items())
+    #     coupon_bids = list(order_depth['COCONUT_COUPON'].buy_orders.items())
+    #     coconut_asks = list(order_depth['COCONUT'].sell_orders.items())
+    #     coconut_bids = list(order_depth['COCONUT'].buy_orders.items())
+
+    #     stock_price = (coconut_asks[0][0] + coconut_bids[0][0]) / 2
+    #     observed_option_price = 0
+    #     if(len(coupon_asks) != 0 and len(coupon_bids) != 0):
+    #         observed_option_price = (coupon_asks[0][0] + coupon_bids[0][0]) /2
+    #     strike_price = 10000
+    #     time_to_expiration = (247 - timestamp / 1000000) / 365
+    #     risk_free_rate = 0
+    #     sigma = 0.19332951334290546
+
+    #     # sigma = self.implied_volatility(stock_price, strike_price, time_to_expiration, risk_free_rate, observed_option_price, 'call')
+    #     # print(sigma)
+
+    #     # self.sigma_cache.append(sigma)
+    #     # period = 4
+    #     # if len(self.sigma_cache) >= period:
+    #     #     sigma = sum(self.sigma_cache[-period:])/period
+
+    #     fair_price_coupon = self.black_scholes_price(stock_price, strike_price, time_to_expiration, risk_free_rate, sigma)
+    #     delta = self.delta_black_scholes(stock_price, strike_price, time_to_expiration, risk_free_rate, sigma)
+    #     gamma = self.gamma_black_scholes(stock_price, strike_price, time_to_expiration, risk_free_rate, sigma)
+
+    #     logger.print(f"Fair price of COCONUT_COUPON: {fair_price_coupon}")
+    #     logger.print(f"Delta: {delta}")
+    #     logger.print(f"Gamma: {gamma}")
+
+    #     bought_amount_coconut = 0
+    #     sold_amount_coconut = 0
+    #     bought_amount_coupon = 0
+    #     sold_amount_coupon = 0
+
+    #     # Trade COCONUT_COUPON
+    #     if len(coupon_asks) != 0:
+    #         if fair_price_coupon > coupon_asks[0][0]:
+    #             ask_price, ask_volume = coupon_asks[0]
+    #             if self.positions['COCONUT_COUPON'] < self.position_limit['COCONUT_COUPON']:
+    #                 buy_amount = min(self.position_limit['COCONUT_COUPON'] - self.positions['COCONUT_COUPON'], -ask_volume)
+    #                 orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON', ask_price, buy_amount))
+    #                 self.positions['COCONUT_COUPON'] += buy_amount
+    #                 bought_amount_coupon += buy_amount
+
+    #                 # if timestamp % (hedging_interval) == 0:
+    #                 #     hedge_amount_delta = -delta * buy_amount
+    #                 #     hedge_amount_gamma = -gamma * buy_amount / 2
+
+    #                 #     print(hedge_amount_delta)
+
+    #                 #     if delta > 0.5:
+    #                 #         # sell coconuts to hedge (negative delta)
+    #                 #         if len(coconut_bids) != 0:
+    #                 #             bid_price, bid_volume = coconut_bids[0]
+    #                 #             hedge_trade_delta = min(hedge_amount_delta, bid_volume)
+    #                 #             orders['COCONUT'].append(Order('COCONUT', bid_price, hedge_trade_delta))
+    #                 #             self.positions['COCONUT'] += hedge_trade_delta
+    #                 #             bought_amount_coconut += hedge_trade_delta
+    #                 #     else:
+    #                 #         # buy coconuts to hedge (positive delta)
+    #                 #         if len(coconut_asks) != 0:
+    #                 #             ask_price, ask_volume = coconut_asks[0]
+    #                 #             hedge_trade_delta = min(-hedge_amount_delta, -ask_volume)
+    #                 #             orders['COCONUT'].append(Order('COCONUT', ask_price, -hedge_trade_delta))
+    #                 #             self.positions['COCONUT'] -= hedge_trade_delta
+    #                 #             sold_amount_coconut -= hedge_trade_delta
+
+    #                     # if hedge_amount_gamma > 0:
+    #                     #     if len(coconut_bids) != 0:
+    #                     #         bid_price, bid_volume = coconut_bids[0]
+    #                     #         hedge_trade_gamma = min(hedge_amount_gamma, bid_volume)
+    #                     #         orders['COCONUT'].append(Order('COCONUT', bid_price, hedge_trade_gamma))
+    #                     #         self.positions['COCONUT'] += hedge_trade_gamma
+    #                     #         bought_amount_coconut += hedge_trade_gamma
+    #                     # else:
+    #                     #     if len(coconut_asks) != 0:
+    #                     #         ask_price, ask_volume = coconut_asks[0]
+    #                     #         hedge_trade_gamma = min(-hedge_amount_gamma, -ask_volume)
+    #                     #         orders['COCONUT'].append(Order('COCONUT', ask_price, -hedge_trade_gamma))
+    #                     #         self.positions['COCONUT'] -= hedge_trade_gamma
+    #                     #         sold_amount_coconut -= hedge_trade_gamma
+
+
+    #     if len(coupon_bids) != 0:
+    #         if fair_price_coupon < coupon_bids[0][0]:
+    #             bid_price, bid_volume = coupon_bids[0]
+    #             if self.positions['COCONUT_COUPON'] > -self.position_limit['COCONUT_COUPON']:
+    #                 sell_amount = min(self.positions['COCONUT_COUPON'] + self.position_limit['COCONUT_COUPON'], bid_volume)
+    #                 logger.print("SELL", str(sell_amount) + "x", bid_price)
+    #                 orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON', bid_price, -sell_amount))
+    #                 self.positions['COCONUT_COUPON'] -= sell_amount
+    #                 sold_amount_coupon -= sell_amount
+
+    #                 # Hedge the delta and gamma exposure by trading COCONUT
+    #                 # if timestamp % (hedging_interval) == 0:
+    #                 #     hedge_amount_delta = delta * sell_amount
+    #                 #     hedge_amount_gamma = gamma * sell_amount / 2
+
+    #                 #     if delta < 0.5:
+    #                 #         # buy coconuts to hedge the put (positive delta)
+    #                 #         if len(coconut_bids) != 0:
+    #                 #             bid_price, bid_volume = coconut_bids[0]
+    #                 #             hedge_trade_delta = min(hedge_amount_delta, bid_volume)
+    #                 #             orders['COCONUT'].append(Order('COCONUT', bid_price, hedge_trade_delta))
+    #                 #             self.positions['COCONUT'] += hedge_trade_delta
+    #                 #             bought_amount_coconut += hedge_trade_delta
+    #                 #     else:
+    #                 #         # sell coconuts to hedge the put (negatice delta)
+    #                 #         if len(coconut_asks) != 0:
+    #                 #             ask_price, ask_volume = coconut_asks[0]
+    #                 #             hedge_trade_delta = min(-hedge_amount_delta, -ask_volume)
+    #                 #             orders['COCONUT'].append(Order('COCONUT', ask_price, -hedge_trade_delta))
+    #                 #             self.positions['COCONUT'] -= hedge_trade_delta
+    #                 #             sold_amount_coconut -= hedge_trade_delta
+
+    #                     # if hedge_amount_gamma > 0:
+    #                     #     if len(coconut_bids) != 0:
+    #                     #         bid_price, bid_volume = coconut_bids[0]
+    #                     #         hedge_trade_gamma = min(hedge_amount_gamma, bid_volume)
+    #                     #         orders['COCONUT'].append(Order('COCONUT', bid_price, hedge_trade_gamma))
+    #                     #         self.positions['COCONUT'] += hedge_trade_gamma
+    #                     #         bought_amount_coconut += hedge_trade_gamma
+    #                     # else:
+    #                     #     if len(coconut_asks) != 0:
+    #                     #         ask_price, ask_volume = coconut_asks[0]
+    #                     #         hedge_trade_gamma = min(-hedge_amount_gamma, -ask_volume)
+    #                     #         orders['COCONUT'].append(Order('COCONUT', ask_price, -hedge_trade_gamma))
+    #                     #         self.positions['COCONUT'] -= hedge_trade_gamma
+    #                     #         sold_amount_coconut -= hedge_trade_gamma
+        
+    #     # if timestamp % hedging_interval == 0:
+    #     #     # Delta hedging for COCONUT
+    #     #     desired_hedge = -delta * self.positions['COCONUT_COUPON']  # Negative because delta indicates how many units of COCONUT to hold per option to be delta neutral
+    #     #     current_hedge = self.positions['COCONUT']
+    #     #     hedge_adjustment = desired_hedge - current_hedge
+
+    #     #     if hedge_adjustment > 0:
+    #     #         # Need to buy COCONUT to hedge
+    #     #         if coconut_asks:
+    #     #             ask_price, ask_volume = coconut_asks[0]
+    #     #             buy_amount = min(hedge_adjustment, ask_volume)
+    #     #             orders['COCONUT'].append(Order('COCONUT', ask_price, buy_amount))
+    #     #             self.positions['COCONUT'] += buy_amount
+    #     #             bought_amount_coconut += buy_amount
+    #     #     elif hedge_adjustment < 0:
+    #     #         # Need to sell COCONUT to hedge
+    #     #         if coconut_bids:
+    #     #             bid_price, bid_volume = coconut_bids[0]
+    #     #             sell_amount = min(-hedge_adjustment, bid_volume)
+    #     #             orders['COCONUT'].append(Order('COCONUT', bid_price, -sell_amount))
+    #     #             self.positions['COCONUT'] -= sell_amount
+    #     #             sold_amount_coconut += sell_amount 
+    #     #can try market making, not sure if bots will take, spread is also very small, nearly 0
+    #     delta = self.delta(stock_price,strike_price,time_to_expiration, risk_free_rate,sigma) * self.positions['COCONUT_COUPON'] + self.positions['COCONUT']
+    #     value = 200
+    #     if delta > value:
+    #         bid_price, bid_volume = coconut_bids[0]
+    #         sell_amount = min(int(delta - value), bid_volume)
+    #         orders['COCONUT'].append(Order('COCONUT',bid_price, -sell_amount))
+    #     if delta < -value:
+    #         ask_price, ask_volume = coconut_asks[0]
+    #         buy_amount = min(int(-value - delta),-ask_volume)
+    #         orders['COCONUT'].append(Order('COCONUT',ask_price, buy_amount))   
+
+    #     logger.print(f"Bought {bought_amount_coconut} COCONUT and {bought_amount_coupon} COCONUT_COUPON")
+    #     logger.print(f"Sold {sold_amount_coconut} COCONUT and {sold_amount_coupon} COCONUT_COUPON")
+
+    #     return orders
+
+    def compute_order_coconuts(self, order_depth, timestamp):
+        orders = {'COCONUT': [], 'COCONUT_COUPON': []}
         coupon_asks = list(order_depth['COCONUT_COUPON'].sell_orders.items())
         coupon_bids = list(order_depth['COCONUT_COUPON'].buy_orders.items())
         coconut_asks = list(order_depth['COCONUT'].sell_orders.items())
         coconut_bids = list(order_depth['COCONUT'].buy_orders.items())
-
-        stock_price = (coconut_asks[0][0] + coconut_bids[0][0]) / 2
-        observed_option_price = 0
-        if(len(coupon_asks) != 0 and len(coupon_bids) != 0):
-            observed_option_price = (coupon_asks[0][0] + coupon_bids[0][0]) /2
-        strike_price = 10000
-        time_to_expiration = (249 - timestamp / 1000000) / 365
-        risk_free_rate = 0
-        sigma = 0.19332951334290546
-
-        # sigma = self.implied_volatility(stock_price, strike_price, time_to_expiration, risk_free_rate, observed_option_price, 'call')
-        # print(sigma)
-
-        # self.sigma_cache.append(sigma)
-        # period = 4
-        # if len(self.sigma_cache) >= period:
-        #     sigma = sum(self.sigma_cache[-period:])/period
-
-        fair_price_coupon = self.black_scholes_price(stock_price, strike_price, time_to_expiration, risk_free_rate, sigma)
-        delta = self.delta_black_scholes(stock_price, strike_price, time_to_expiration, risk_free_rate, sigma)
-        gamma = self.gamma_black_scholes(stock_price, strike_price, time_to_expiration, risk_free_rate, sigma)
-
-        logger.print(f"Fair price of COCONUT_COUPON: {fair_price_coupon}")
-        logger.print(f"Delta: {delta}")
-        logger.print(f"Gamma: {gamma}")
-
-        bought_amount_coconut = 0
-        sold_amount_coconut = 0
-        bought_amount_coupon = 0
-        sold_amount_coupon = 0
-
-        # Trade COCONUT_COUPON
+        
+        stock_price = (coconut_asks[0][0] + coconut_bids[0][0])/2
+        strike_price = 10000 #price the call option can be executed at
+        time_to_expiration = (247 - timestamp/1000000)/365 #time till expiration in years
+        risk_free_rate = 0 #no banks on the island
+        sigma = 0.19332951334290546 #calculated using premium on day 1 timestamp 1, might need to check this
+        
+        fair_price = self.black_scholes_price(stock_price,strike_price,time_to_expiration, risk_free_rate,sigma)
+        logger.print(fair_price)
+        bought_amount = 0
+        sold_amount = 0
+        
         if len(coupon_asks) != 0:
-            if fair_price_coupon > coupon_asks[0][0]:
+            if fair_price > coupon_asks[0][0]:
                 ask_price, ask_volume = coupon_asks[0]
                 if self.positions['COCONUT_COUPON'] < self.position_limit['COCONUT_COUPON']:
-                    buy_amount = min(self.position_limit['COCONUT_COUPON'] - self.positions['COCONUT_COUPON'], -ask_volume)
-                    orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON', ask_price, buy_amount))
+                    buy_amount = min(self.position_limit['COCONUT_COUPON'] - self.positions['COCONUT_COUPON'],-ask_volume)
+                    orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON',ask_price, buy_amount))
                     self.positions['COCONUT_COUPON'] += buy_amount
-                    bought_amount_coupon += buy_amount
-
-                    if timestamp % (hedging_interval * 100) == 0:
-                        hedge_amount_delta = -delta * buy_amount
-                        hedge_amount_gamma = -gamma * buy_amount / 2
-
-                        if hedge_amount_delta > 0:
-                            if len(coconut_bids) != 0:
-                                bid_price, bid_volume = coconut_bids[0]
-                                hedge_trade_delta = min(hedge_amount_delta, bid_volume)
-                                orders['COCONUT'].append(Order('COCONUT', bid_price, hedge_trade_delta))
-                                self.positions['COCONUT'] += hedge_trade_delta
-                                bought_amount_coconut += hedge_trade_delta
-                        else:
-                            if len(coconut_asks) != 0:
-                                ask_price, ask_volume = coconut_asks[0]
-                                hedge_trade_delta = min(-hedge_amount_delta, -ask_volume)
-                                orders['COCONUT'].append(Order('COCONUT', ask_price, -hedge_trade_delta))
-                                self.positions['COCONUT'] -= hedge_trade_delta
-                                sold_amount_coconut -= hedge_trade_delta
-
-                        if hedge_amount_gamma > 0:
-                            if len(coconut_bids) != 0:
-                                bid_price, bid_volume = coconut_bids[0]
-                                hedge_trade_gamma = min(hedge_amount_gamma, bid_volume)
-                                orders['COCONUT'].append(Order('COCONUT', bid_price, hedge_trade_gamma))
-                                self.positions['COCONUT'] += hedge_trade_gamma
-                                bought_amount_coconut += hedge_trade_gamma
-                        else:
-                            if len(coconut_asks) != 0:
-                                ask_price, ask_volume = coconut_asks[0]
-                                hedge_trade_gamma = min(-hedge_amount_gamma, -ask_volume)
-                                orders['COCONUT'].append(Order('COCONUT', ask_price, -hedge_trade_gamma))
-                                self.positions['COCONUT'] -= hedge_trade_gamma
-                                sold_amount_coconut -= hedge_trade_gamma
-
+                    bought_amount += buy_amount
 
         if len(coupon_bids) != 0:
-            if fair_price_coupon < coupon_bids[0][0]:
+            if fair_price < coupon_bids[0][0]:
                 bid_price, bid_volume = coupon_bids[0]
                 if self.positions['COCONUT_COUPON'] > -self.position_limit['COCONUT_COUPON']:
                     sell_amount = min(self.positions['COCONUT_COUPON'] + self.position_limit['COCONUT_COUPON'], bid_volume)
                     logger.print("SELL", str(sell_amount) + "x", bid_price)
-                    orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON', bid_price, -sell_amount))
+                    orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON',bid_price,-sell_amount))
                     self.positions['COCONUT_COUPON'] -= sell_amount
-                    sold_amount_coupon -= sell_amount
-
-                    # Hedge the delta and gamma exposure by trading COCONUT
-                    if timestamp % (hedging_interval * 100) == 0:
-                        hedge_amount_delta = delta * sell_amount
-                        hedge_amount_gamma = gamma * sell_amount / 2
-
-                        if hedge_amount_delta > 0:
-                            if len(coconut_bids) != 0:
-                                bid_price, bid_volume = coconut_bids[0]
-                                hedge_trade_delta = min(hedge_amount_delta, bid_volume)
-                                orders['COCONUT'].append(Order('COCONUT', bid_price, hedge_trade_delta))
-                                self.positions['COCONUT'] += hedge_trade_delta
-                                bought_amount_coconut += hedge_trade_delta
-                        else:
-                            if len(coconut_asks) != 0:
-                                ask_price, ask_volume = coconut_asks[0]
-                                hedge_trade_delta = min(-hedge_amount_delta, -ask_volume)
-                                orders['COCONUT'].append(Order('COCONUT', ask_price, -hedge_trade_delta))
-                                self.positions['COCONUT'] -= hedge_trade_delta
-                                sold_amount_coconut -= hedge_trade_delta
-
-                        if hedge_amount_gamma > 0:
-                            if len(coconut_bids) != 0:
-                                bid_price, bid_volume = coconut_bids[0]
-                                hedge_trade_gamma = min(hedge_amount_gamma, bid_volume)
-                                orders['COCONUT'].append(Order('COCONUT', bid_price, hedge_trade_gamma))
-                                self.positions['COCONUT'] += hedge_trade_gamma
-                                bought_amount_coconut += hedge_trade_gamma
-                        else:
-                            if len(coconut_asks) != 0:
-                                ask_price, ask_volume = coconut_asks[0]
-                                hedge_trade_gamma = min(-hedge_amount_gamma, -ask_volume)
-                                orders['COCONUT'].append(Order('COCONUT', ask_price, -hedge_trade_gamma))
-                                self.positions['COCONUT'] -= hedge_trade_gamma
-                                sold_amount_coconut -= hedge_trade_gamma
+                    sold_amount -= sell_amount
         
-
-        # # Delta hedging for COCONUT
-        # desired_hedge = -delta * self.positions['COCONUT_COUPON']  # Negative because delta indicates how many units of COCONUT to hold per option to be delta neutral
-        # current_hedge = self.positions['COCONUT']
-        # hedge_adjustment = desired_hedge - current_hedge
-
-        # if hedge_adjustment > 0:
-        #     # Need to buy COCONUT to hedge
-        #     if coconut_asks:
-        #         ask_price, ask_volume = coconut_asks[0]
-        #         buy_amount = min(hedge_adjustment, ask_volume)
-        #         orders['COCONUT'].append(Order('COCONUT', ask_price, buy_amount))
-        #         self.positions['COCONUT'] += buy_amount
-        #         bought_amount_coconut += buy_amount
-        # elif hedge_adjustment < 0:
-        #     # Need to sell COCONUT to hedge
-        #     if coconut_bids:
-        #         bid_price, bid_volume = coconut_bids[0]
-        #         sell_amount = min(-hedge_adjustment, bid_volume)
-        #         orders['COCONUT'].append(Order('COCONUT', bid_price, -sell_amount))
-        #         self.positions['COCONUT'] -= sell_amount
-        #         sold_amount_coconut += sell_amount
-
-        logger.print(f"Bought {bought_amount_coconut} COCONUT and {bought_amount_coupon} COCONUT_COUPON")
-        logger.print(f"Sold {sold_amount_coconut} COCONUT and {sold_amount_coupon} COCONUT_COUPON")
-
-        return orders
-
-    def delta_black_scholes(self, S, K, T, r, sigma):
-        d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
-        delta = self.phi(d1)
-        return delta
-    
-    def gamma_black_scholes(self, S, K, T, r, sigma):
-        d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
-        gamma = self.phi(d1) / (S * sigma * np.sqrt(T))
-        return gamma
+        # #can try market making, not sure if bots will take, spread is also very small, nearly 0
+        # delta = self.delta(stock_price,strike_price,time_to_expiration, risk_free_rate,sigma) * self.positions['COCONUT_COUPON'] + self.positions['COCONUT']
+        # value = 200
+        # if delta > value:
+        #     bid_price, bid_volume = coconut_bids[0]
+        #     sell_amount = min(int(delta - value), bid_volume)
+        #     orders['COCONUT'].append(Order('COCONUT',bid_price, -sell_amount))
+        # if delta < -value:
+        #     ask_price, ask_volume = coconut_asks[0]
+        #     buy_amount = min(int(-value - delta),-ask_volume)
+        #     orders['COCONUT'].append(Order('COCONUT',ask_price, buy_amount))
         
+        
+                
+        return orders    
     
     def black_scholes_price(self,S,K,T,r,sigma):
         d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
@@ -463,7 +529,36 @@ class Trader:
     
     def phi(self,x):
     #'Cumulative distribution function for the standard normal distribution'
-        return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0    
+        return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0
+    
+    def delta(self,S,K,T,r,sigma):
+        d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+        return self.phi(d1)
+
+    # def delta_black_scholes(self, S, K, T, r, sigma):
+    #     d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    #     delta = self.phi(d1)
+    #     return delta
+    
+    # def delta(self,S,K,T,r,sigma):
+    #     d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    #     return self.phi(d1)
+    
+    # def gamma_black_scholes(self, S, K, T, r, sigma):
+    #     d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    #     gamma = self.phi(d1) / (S * sigma * np.sqrt(T))
+    #     return gamma
+        
+    
+    # def black_scholes_price(self,S,K,T,r,sigma):
+    #     d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    #     d2 = d1 - sigma * np.sqrt(T)
+    #     call_price = S * self.phi(d1) - K * np.exp(-r * T) * self.phi(d2)
+    #     return call_price
+    
+    # def phi(self,x):
+    # #'Cumulative distribution function for the standard normal distribution'
+    #     return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0    
  
     def get_mid_price(self,order_depth):
         buy_orders = list(order_depth.buy_orders.items())
@@ -473,6 +568,85 @@ class Trader:
         best_bid, best_bid_amount = buy_orders[0]
         best_ask, best_ask_amount = sell_orders[0]
         return (best_bid + best_ask) /2
+    
+    def calculate_basket(self, state):
+        order_depth = state.order_depths
+        chocolate = "CHOCOLATE"
+        strawberries = "STRAWBERRIES"
+        roses = "ROSES"
+        gift_basket = "GIFT_BASKET"
+        etf_premium = 386
+        threshold = 38
+        orders = {
+            chocolate: [],
+            strawberries: [],
+            roses: [],
+            gift_basket: []
+        }
+
+        prices = {
+            chocolate: self.calculate_weighted_price(order_depth[chocolate]),
+            strawberries: self.calculate_weighted_price(order_depth[strawberries]),
+            roses: self.calculate_weighted_price(order_depth[roses]),
+            gift_basket: self.calculate_weighted_price(order_depth[gift_basket])
+        }
+
+        zero = 0
+        best_ask_chocolate, best_ask_amount_chocolate = list(order_depth[chocolate].sell_orders.items())[zero]
+        best_ask_strawberries, best_ask_amount_strawberries = list(order_depth[strawberries].sell_orders.items())[zero]
+        best_ask_roses, best_ask_amount_roses = list(order_depth[roses].sell_orders.items())[zero]
+        best_ask_gift, best_ask_amount_gift = list(order_depth[gift_basket].sell_orders.items())[zero]
+        best_bid_chocolate, best_bid_amount_chocolate = list(order_depth[chocolate].buy_orders.items())[zero]
+        best_bid_strawberries, best_bid_amount_strawberries = list(order_depth[strawberries].buy_orders.items())[zero]
+        best_bid_roses, best_bid_amount_roses = list(order_depth[roses].buy_orders.items())[zero]
+        best_bid_gift, best_bid_amount_gift = list(order_depth[gift_basket].buy_orders.items())[zero]
+
+        combined_price = 4*prices[chocolate] + 6*prices[strawberries] + prices[roses]
+        price_diff = prices[gift_basket] - combined_price
+        self.basket_price_log['COMBINED'].append(combined_price)
+        self.basket_price_log['BASKET'].append(prices[gift_basket])
+        self.basket_price_log['DELTA'].append(price_diff)
+        period = 2
+        
+        if len(self.basket_price_log['BASKET']) >= period:
+            delta_curr = self.moving_average_list(self.basket_price_log['DELTA'], period)
+                # if the etf prices exceeds the price of the individual products + the difference, then we short the products and long the etf
+            if delta_curr < etf_premium - threshold:
+                # should be positive
+                units = min(best_bid_amount_chocolate//4, best_bid_amount_strawberries//6, best_bid_amount_roses, -best_ask_amount_gift)
+                orders[chocolate].append(Order(chocolate, best_ask_chocolate, 4*units))
+                orders[strawberries].append(Order(strawberries, best_ask_strawberries, 6*units))
+                orders[roses].append(Order(roses, best_ask_roses, units))
+                # long etf
+                orders[gift_basket].append(Order(gift_basket, best_ask_gift, units))
+            elif delta_curr > etf_premium + threshold:
+                # positive
+                units = min(-best_ask_amount_chocolate//4, -best_ask_amount_strawberries//6, -best_ask_amount_roses, best_bid_amount_gift)
+                orders[chocolate].append(Order(chocolate, best_bid_chocolate, -4*units))
+                orders[strawberries].append(Order(strawberries, best_bid_strawberries, -6*units))
+                orders[roses].append(Order(roses, best_bid_roses, -units))
+                # short etf
+                orders[gift_basket].append(Order(gift_basket, best_bid_gift, -units))
+
+        else:
+            if self.basket_price_log['DELTA'][-1] < etf_premium - threshold:
+                # positive
+                units = min(best_bid_amount_chocolate//4, best_bid_amount_strawberries//6, best_bid_amount_roses, -best_ask_amount_gift)
+                orders[chocolate].append(Order(chocolate, best_ask_chocolate, 4*units))
+                orders[strawberries].append(Order(strawberries, best_ask_strawberries, 6*units))
+                orders[roses].append(Order(roses, best_ask_roses, units))
+                # long etf
+                orders[gift_basket].append(Order(gift_basket, best_ask_gift, units))
+            elif self.basket_price_log['DELTA'][-1] > etf_premium + threshold:
+                # positive
+                units = min(-best_ask_amount_chocolate//4, -best_ask_amount_strawberries//6, -best_ask_amount_roses, best_bid_amount_gift)
+                orders[chocolate].append(Order(chocolate, best_bid_chocolate, -4*units))
+                orders[strawberries].append(Order(strawberries, best_bid_strawberries, -6*units))
+                orders[roses].append(Order(roses, best_bid_roses, -units))
+                # short etf
+                orders[gift_basket].append(Order(gift_basket, best_bid_gift, -units))
+
+        return orders
 
     def compute_orders_basket2(self, order_depth):
 
@@ -538,9 +712,9 @@ class Trader:
                 # do_bask = 1
                 # basket_sell_sig = 1
                 orders['GIFT_BASKET'].append(Order('GIFT_BASKET', worst_buy['GIFT_BASKET'], -int(vol/15)))
-                # orders['CHOCOLATE'].append(Order('CHOCOLATE', worst_sell['CHOCOLATE'], 4*int(vol/15))) 
-                # orders['STRAWBERRIES'].append(Order('STRAWBERRIES', worst_sell['STRAWBERRIES'], 6*int(vol/15))) 
-                # orders['ROSES'].append(Order('ROSES', worst_sell['ROSES'], int(vol/15)))
+                orders['CHOCOLATE'].append(Order('CHOCOLATE', worst_buy['CHOCOLATE'], -4*int(vol/15))) 
+                orders['STRAWBERRIES'].append(Order('STRAWBERRIES', worst_buy['STRAWBERRIES'], -6*int(vol/15))) 
+                orders['ROSES'].append(Order('ROSES', worst_buy['ROSES'], -int(vol/15)))
     
                 # self.cont_sell_basket_unfill += 2
                 #pb_neg -= vol
@@ -556,33 +730,33 @@ class Trader:
                 # do_bask = 1
                 # basket_buy_sig = 1
                 orders['GIFT_BASKET'].append(Order('GIFT_BASKET', worst_sell['GIFT_BASKET'], int(vol/15)))
-                # orders['CHOCOLATE'].append(Order('CHOCOLATE', worst_buy['CHOCOLATE'], -4*int(vol/15))) 
-                # orders['STRAWBERRIES'].append(Order('STRAWBERRIES', worst_buy['STRAWBERRIES'], -6*int(vol/15))) 
-                # orders['ROSES'].append(Order('ROSES', worst_buy['ROSES'], -int(vol/15)))
+                orders['CHOCOLATE'].append(Order('CHOCOLATE', worst_buy['CHOCOLATE'], 4*int(vol/15))) 
+                orders['STRAWBERRIES'].append(Order('STRAWBERRIES', worst_buy['STRAWBERRIES'], 6*int(vol/15))) 
+                orders['ROSES'].append(Order('ROSES', worst_buy['ROSES'], int(vol/15)))
                 
                 # self.cont_buy_basket_unfill += 2
                 #pb_pos += vol
-        if(len(self.mid_price_log['GIFT_BASKET'])) >= 500:
-            for product in prods:
-                if product != 'GIFT_BASKET':
-                    expected_price = coeffs[product]*(mid_price['GIFT_BASKET']-375)
-                    cof = sum(self.mid_price_log[product])/len(self.mid_price_log[product])
-                    g_cof = (sum(self.mid_price_log['GIFT_BASKET']) - 375*len(self.mid_price_log['GIFT_BASKET']))/len(self.mid_price_log['GIFT_BASKET'])
-                    expected_price = (cof/g_cof)*(mid_price['GIFT_BASKET']-375)
-                    if mid_price[product] < expected_price*0.985:
-                        vol = 2*self.POSITION_LIMIT[product]
-                        orders[product].append(Order(product, worst_sell[product], comp[product]*int(vol/15)))
-            for product in prods:
-                if product != 'GIFT_BASKET':
-                    expected_price = coeffs[product]*(mid_price['GIFT_BASKET']-375)
-                    cof = sum(self.mid_price_log[product])/len(self.mid_price_log[product])
-                    g_cof = (sum(self.mid_price_log['GIFT_BASKET']) - 375*len(self.mid_price_log['GIFT_BASKET']))/len(self.mid_price_log['GIFT_BASKET'])
-                    expected_price = (cof/g_cof)*(mid_price['GIFT_BASKET']-375)
-                    print('ex price')
-                    print(expected_price)
-                    if mid_price[product] > expected_price*1.015:
-                        vol = 2*self.POSITION_LIMIT[product]
-                        orders[product].append(Order(product, worst_buy[product], -comp[product]*int(vol/15)))
+        # if(len(self.mid_price_log['GIFT_BASKET'])) >= 500:
+        #     for product in prods:
+        #         if product != 'GIFT_BASKET':
+        #             expected_price = coeffs[product]*(mid_price['GIFT_BASKET']-375)
+        #             # cof = sum(self.mid_price_log[product])/len(self.mid_price_log[product])
+        #             # g_cof = (sum(self.mid_price_log['GIFT_BASKET']) - 375*len(self.mid_price_log['GIFT_BASKET']))/len(self.mid_price_log['GIFT_BASKET'])
+        #             # expected_price = (cof/g_cof)*(mid_price['GIFT_BASKET']-375)
+        #             if mid_price[product] < expected_price*0.985:
+        #                 vol = 2*self.POSITION_LIMIT[product]
+        #                 orders[product].append(Order(product, worst_sell[product], comp[product]*int(vol/15)))
+        #     for product in prods:
+        #         if product != 'GIFT_BASKET':
+        #             expected_price = coeffs[product]*(mid_price['GIFT_BASKET']-375)
+        #             # cof = sum(self.mid_price_log[product])/len(self.mid_price_log[product])
+        #             # g_cof = (sum(self.mid_price_log['GIFT_BASKET']) - 375*len(self.mid_price_log['GIFT_BASKET']))/len(self.mid_price_log['GIFT_BASKET'])
+        #             # expected_price = (cof/g_cof)*(mid_price['GIFT_BASKET']-375)
+        #             print('ex price')
+        #             print(expected_price)
+        #             if mid_price[product] > expected_price*1.015:
+        #                 vol = 2*self.POSITION_LIMIT[product]
+        #                 orders[product].append(Order(product, worst_buy[product], -comp[product]*int(vol/15)))
 
 
         return orders
@@ -905,24 +1079,36 @@ class Trader:
                 # # self.determine_trend('SUNLIGHT', self.orchids_stats['SUNLIGHT'], 10)
 
                 # result[product] = orders
+            elif product == 'COCONUT_COUPON': 
+                orders: list[Order] = []
+                #order_depth = state.order_depths[product]
+                self.positions['COCONUT_COUPON'] = state.position.get('COCONUT_COUPON',0)
+                orders = self.compute_order_coconuts(state.order_depths,state.timestamp)
+                result[product] = orders['COCONUT_COUPON']
+            elif product == 'COCONUT':
+                orders: list[Order] = []
+                self.positions['COCONUT'] = state.position.get('COCONUT',0)
+                orders = self.compute_order_coconuts(state.order_depths,state.timestamp)
+                result[product] = orders['COCONUT']
 
-        self.positions['COCONUT'] = state.position.get('COCONUT',0)
-        self.positions['COCONUT_COUPON'] = state.position.get('COCONUT_COUPON',0)
-        orders = self.compute_orders_coconuts(state.order_depths, state.timestamp)
-        result['COCONUT'] = orders['COCONUT']
-        result['COCONUT_COUPON'] = orders['COCONUT_COUPON']
+        # self.positions['COCONUT'] = state.position.get('COCONUT',0)
+        # self.positions['COCONUT_COUPON'] = state.position.get('COCONUT_COUPON',0)
+        # orders = self.compute_orders_coconuts(state.order_depths, state.timestamp)
+        # result['COCONUT'] = orders['COCONUT']
+        # result['COCONUT_COUPON'] = orders['COCONUT_COUPON']
 
-        # products = ['CHOCOLATE', 'STRAWBERRIES', 'ROSES', 'GIFT_BASKET']
-        # for product in products:
-        #     self.positions[product] = state.position.get(product,0)
+        products = ['CHOCOLATE', 'STRAWBERRIES', 'ROSES', 'GIFT_BASKET']
+        for product in products:
+            self.positions[product] = state.position.get(product,0)
         
-        # orders = self.compute_orders_basket2(state.order_depths)
-        # if len(orders['GIFT_BASKET']) != 0:
-        #     print('bert3')
-        #     result['GIFT_BASKET'] = orders['GIFT_BASKET']
-        # result['CHOCOLATE'] = orders['CHOCOLATE']
-        # result['STRAWBERRIES'] = orders['STRAWBERRIES']
-        # result['ROSES'] = orders['ROSES']
+        # orders = self.calculate_basket(state)
+        orders = self.compute_orders_basket2(state.order_depths)
+        if len(orders['GIFT_BASKET']) != 0:
+            print('bert3')
+            result['GIFT_BASKET'] = orders['GIFT_BASKET']
+        result['CHOCOLATE'] = orders['CHOCOLATE']
+        result['STRAWBERRIES'] = orders['STRAWBERRIES']
+        result['ROSES'] = orders['ROSES']
 
                      
         traderData = "SAMPLE" # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
