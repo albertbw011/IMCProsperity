@@ -237,121 +237,165 @@ class Trader:
     #     else:
     #         self.trending = 0
 
-    def implied_volatility(self, S, K, T, r, option_price, option_type, sigma_initial=0.2, tolerance=1e-6, max_iterations=100):
-        """
-        Calculate implied volatility using Newton-Raphson method.
-        """
-        sigma = sigma_initial
-        for i in range(max_iterations):
-            price = self.black_scholes(S, K, T, r, sigma, option_type)
-            vega = self.vega_black_scholes(S, K, T, r, sigma, option_type)
-            sigma_new = sigma - (price - option_price) / vega
+    # def implied_volatility(self, S, K, T, r, option_price, option_type, sigma_initial=0.2, tolerance=1e-6, max_iterations=100):
+    #     """
+    #     Calculate implied volatility using Newton-Raphson method.
+    #     """
+    #     sigma = sigma_initial
+    #     for i in range(max_iterations):
+    #         price = self.black_scholes(S, K, T, r, sigma, option_type)
+    #         vega = self.vega_black_scholes(S, K, T, r, sigma, option_type)
+    #         sigma_new = sigma - (price - option_price) / vega
             
-            if abs(sigma_new - sigma) < tolerance:
-                return sigma_new
+    #         if abs(sigma_new - sigma) < tolerance:
+    #             return sigma_new
             
-            sigma = sigma_new
+    #         sigma = sigma_new
         
-        raise ValueError("Failed to converge after maximum iterations")
+    #     raise ValueError("Failed to converge after maximum iterations")
 
-    def vega_black_scholes(self, S, K, T, r, sigma, option_type):
-        """
-        Calculate Vega for the Black-Scholes formula.
-        """
-        d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
-        vega = S * np.sqrt(T) * math.exp(-0.5 * d1 ** 2) / np.sqrt(2 * np.pi)
+    # def vega_black_scholes(self, S, K, T, r, sigma, option_type):
+    #     """
+    #     Calculate Vega for the Black-Scholes formula.
+    #     """
+    #     d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    #     vega = S * np.sqrt(T) * math.exp(-0.5 * d1 ** 2) / np.sqrt(2 * np.pi)
         
-        if option_type == 'put':
-            vega = -vega
+    #     if option_type == 'put':
+    #         vega = -vega
         
-        return vega
+    #     return vega
     
-    def black_scholes(self, S, K, T, r, sigma, option_type):
-        """
-        Calculate option price using Black-Scholes model.
-        """
-        d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
-        d2 = d1 - sigma * np.sqrt(T)
+    # def black_scholes(self, S, K, T, r, sigma, option_type):
+    #     """
+    #     Calculate option price using Black-Scholes model.
+    #     """
+    #     d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    #     d2 = d1 - sigma * np.sqrt(T)
         
-        if option_type == 'call':
-            N_d1 = 0.5 * (1 + math.erf(d1 / np.sqrt(2)))
-            N_d2 = 0.5 * (1 + math.erf(d2 / np.sqrt(2)))
-            option_price = S * N_d1 - K * np.exp(-r * T) * N_d2
-        elif option_type == 'put':
-            N_d1 = 0.5 * (1 - math.erf(d1 / np.sqrt(2)))
-            N_d2 = 0.5 * (1 - math.erf(d2 / np.sqrt(2)))
-            option_price = K * np.exp(-r * T) * N_d2 - S * N_d1
-        else:
-            raise ValueError("Option type must be 'call' or 'put'")
+    #     if option_type == 'call':
+    #         N_d1 = 0.5 * (1 + math.erf(d1 / np.sqrt(2)))
+    #         N_d2 = 0.5 * (1 + math.erf(d2 / np.sqrt(2)))
+    #         option_price = S * N_d1 - K * np.exp(-r * T) * N_d2
+    #     elif option_type == 'put':
+    #         N_d1 = 0.5 * (1 - math.erf(d1 / np.sqrt(2)))
+    #         N_d2 = 0.5 * (1 - math.erf(d2 / np.sqrt(2)))
+    #         option_price = K * np.exp(-r * T) * N_d2 - S * N_d1
+    #     else:
+    #         raise ValueError("Option type must be 'call' or 'put'")
         
-        return option_price
+    #     return option_price
 
-    def compute_orders_coconuts(self, order_depth):
+    def compute_orders_coconuts(self, order_depth, timestamp, hedging_interval=10):
         orders = {'COCONUT': [], 'COCONUT_COUPON': []}
-        coconut_asks = collections.OrderedDict(sorted(order_depth['COCONUT'].sell_orders.items()))
-        coconut_bids = collections.OrderedDict(sorted(order_depth['COCONUT'].buy_orders.items()))
-        coupon_asks = collections.OrderedDict(sorted(order_depth['COCONUT_COUPON'].sell_orders.items()))
-        coupon_bids = collections.OrderedDict(sorted(order_depth['COCONUT_COUPON'].buy_orders.items()))
 
-        self.mid_price_log['COCONUT'].append(self.calculate_weighted_price(order_depth['COCONUT']))
-        self.mid_price_log['COCONUT_COUPON'].append(self.calculate_weighted_price(order_depth['COCONUT_COUPON']))
+        coupon_asks = list(order_depth['COCONUT_COUPON'].sell_orders.items())
+        coupon_bids = list(order_depth['COCONUT_COUPON'].buy_orders.items())
+        coconut_asks = list(order_depth['COCONUT'].sell_orders.items())
+        coconut_bids = list(order_depth['COCONUT'].buy_orders.items())
 
-        print(collections.OrderedDict(sorted(order_depth['COCONUT_COUPON'].sell_orders.items())))
-        print(collections.OrderedDict(sorted(order_depth['COCONUT_COUPON'].buy_orders.items())))
+        stock_price = (coconut_asks[0][0] + coconut_bids[0][0]) / 2
+        strike_price = 10000
+        time_to_expiration = (249 - timestamp / 1000000) / 365
+        risk_free_rate = 0
+        sigma = 0.19332951334290546
 
-        coconut_price = self.mid_price_log['COCONUT'][-1]  # Current price of COCONUT
-        coupon_price = self.mid_price_log['COCONUT_COUPON'][0]
-        strike_price = 10000  # Strike price of COCONUT_COUPON
-        time_to_maturity = 250 / 365  # Time to maturity in years (250 trading days)
-        risk_free_rate = 0  # Risk-free interest rate (proportional)
-        volatility = 0.25  # Volatility of COCONUT
+        fair_price_coupon = self.black_scholes_price(stock_price, strike_price, time_to_expiration, risk_free_rate, sigma)
+        delta = self.delta_black_scholes(stock_price, strike_price, time_to_expiration, risk_free_rate, sigma)
+        gamma = self.gamma_black_scholes(stock_price, strike_price, time_to_expiration, risk_free_rate, sigma)
 
-        # Position limits
-        coconut_position_limit = self.position_limit['COCONUT']
-        coupon_position_limit = self.position_limit['COCONUT_COUPON']
+        logger.print(f"Fair price of COCONUT_COUPON: {fair_price_coupon}")
+        logger.print(f"Delta: {delta}")
+        logger.print(f"Gamma: {gamma}")
 
-        # Bid/ask data
-        # coconut_bids = {9900: 50, 9950: 100}
-        # coconut_asks = {10050: 80, 10100: 60}
-        # coupon_bids = {100: 200, 150: 150}
-        # coupon_asks = {200: 180, 250: 120}
+        bought_amount_coconut = 0
+        sold_amount_coconut = 0
+        bought_amount_coupon = 0
+        sold_amount_coupon = 0
 
-        # Trading algorithm
-        implied_vol = self.implied_volatility(coconut_price, strike_price, time_to_maturity, risk_free_rate, 637.63, 'call')
-        self.implied_vol = implied_vol
+        # Trade COCONUT_COUPON
+        if len(coupon_asks) != 0:
+            if fair_price_coupon > coupon_asks[0][0]:
+                ask_price, ask_volume = coupon_asks[0]
+                if self.positions['COCONUT_COUPON'] < self.position_limit['COCONUT_COUPON']:
+                    buy_amount = min(self.position_limit['COCONUT_COUPON'] - self.positions['COCONUT_COUPON'], -ask_volume)
+                    orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON', ask_price, buy_amount))
+                    self.positions['COCONUT_COUPON'] += buy_amount
+                    bought_amount_coupon += buy_amount
 
-        # implied_vol = 0.166
-        fair_coupon_price = self.black_scholes(coconut_price, strike_price, time_to_maturity, risk_free_rate, self.implied_vol, 'call')
-        print(fair_coupon_price)
 
-        print('bert1')
-        print(len(coupon_bids.keys()))
-        #print(min(coupon_bids.keys()))
-        if len(coupon_asks.keys()) != 0 and fair_coupon_price > max(coupon_asks.keys()):
-            # Sell COCONUT_COUPON
-            print('bert2')
-            ask_price, ask_volume = sorted(coupon_asks.items(), reverse=True)[0]
-            if self.positions['COCONUT_COUPON'] > -self.position_limit['COCONUT_COUPON']:
-                trade_volume = min(-self.position_limit['COCONUT_COUPON'] - self.positions['COCONUT_COUPON'], ask_volume)
-                print(ask_volume)
-                if trade_volume < 0:
-                    print(f"Sell {trade_volume} COCONUT_COUPON at {ask_price}")
-                    orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON', ask_price, trade_volume))
-                    print('bert4')
-                    self.positions['COCONUT_COUPON'] -= trade_volume
+        if len(coupon_bids) != 0:
+            if fair_price_coupon < coupon_bids[0][0]:
+                bid_price, bid_volume = coupon_bids[0]
+                if self.positions['COCONUT_COUPON'] > -self.position_limit['COCONUT_COUPON']:
+                    sell_amount = min(self.positions['COCONUT_COUPON'] + self.position_limit['COCONUT_COUPON'], bid_volume)
+                    logger.print("SELL", str(sell_amount) + "x", bid_price)
+                    orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON', bid_price, -sell_amount))
+                    self.positions['COCONUT_COUPON'] -= sell_amount
+                    sold_amount_coupon -= sell_amount
 
-        elif len(coupon_bids.keys()) != 0 and fair_coupon_price < min(coupon_bids.keys()):
-            # Buy COCONUT_COUPON
-            print('bert2')
-            bid_price, bid_volume = sorted(coupon_bids.items())[0]
-            trade_volume = min(self.position_limit['COCONUT_COUPON'] - self.positions['COCONUT_COUPON'], bid_volume)
-            if self.positions['COCONUT_COUPON'] < self.position_limit['COCONUT_COUPON']:
-                if trade_volume > 0:
-                    print('bert5')
-                    print(f"Buy {trade_volume} COCONUT_COUPON at {bid_price}")
-                    orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON', bid_price, trade_volume))
-                    self.positions['COCONUT_COUPON'] += trade_volume
+        # Continuous hedging and trading logic
+        time_since_last_hedge = timestamp - self.last_hedging_time
+        if time_since_last_hedge >= hedging_interval:
+            self.last_hedging_time = timestamp
+            hedge_coconuts(stock_price, delta, coconut_asks, coconut_bids, orders)
+        
+
+        # # Delta hedging for COCONUT
+        # desired_hedge = -delta * self.positions['COCONUT_COUPON']  # Negative because delta indicates how many units of COCONUT to hold per option to be delta neutral
+        # current_hedge = self.positions['COCONUT']
+        # hedge_adjustment = desired_hedge - current_hedge
+
+        # if hedge_adjustment > 0:
+        #     # Need to buy COCONUT to hedge
+        #     if coconut_asks:
+        #         ask_price, ask_volume = coconut_asks[0]
+        #         buy_amount = min(hedge_adjustment, ask_volume)
+        #         orders['COCONUT'].append(Order('COCONUT', ask_price, buy_amount))
+        #         self.positions['COCONUT'] += buy_amount
+        #         bought_amount_coconut += buy_amount
+        # elif hedge_adjustment < 0:
+        #     # Need to sell COCONUT to hedge
+        #     if coconut_bids:
+        #         bid_price, bid_volume = coconut_bids[0]
+        #         sell_amount = min(-hedge_adjustment, bid_volume)
+        #         orders['COCONUT'].append(Order('COCONUT', bid_price, -sell_amount))
+        #         self.positions['COCONUT'] -= sell_amount
+        #         sold_amount_coconut += sell_amount
+
+        logger.print(f"Bought {bought_amount_coconut} COCONUT and {bought_amount_coupon} COCONUT_COUPON")
+        logger.print(f"Sold {sold_amount_coconut} COCONUT and {sold_amount_coupon} COCONUT_COUPON")
+
         return orders
+
+    def delta_black_scholes(self, S, K, T, r, sigma):
+        d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+        delta = self.phi(d1)
+        return delta
+    
+    def gamma_black_scholes(self, S, K, T, r, sigma):
+        d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+        gamma = self.phi(d1) / (S * sigma * np.sqrt(T))
+        return gamma
+        
+    
+    def black_scholes_price(self,S,K,T,r,sigma):
+        d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+        d2 = d1 - sigma * np.sqrt(T)
+        call_price = S * self.phi(d1) - K * np.exp(-r * T) * self.phi(d2)
+        return call_price
+    def phi(self,x):
+    #'Cumulative distribution function for the standard normal distribution'
+        return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0    
+ 
+    def get_mid_price(self,order_depth):
+        buy_orders = list(order_depth.buy_orders.items())
+        buy_orders.sort(key = lambda x:x[0], reverse = True)
+        sell_orders = list(order_depth.sell_orders.items())
+        sell_orders.sort(key = lambda x: x[0])
+        best_bid, best_bid_amount = buy_orders[0]
+        best_ask, best_ask_amount = sell_orders[0]
+        return (best_bid + best_ask) /2
 
     def compute_orders_basket2(self, order_depth):
 
@@ -787,7 +831,7 @@ class Trader:
 
         self.positions['COCONUT'] = state.position.get('COCONUT',0)
         self.positions['COCONUT_COUPON'] = state.position.get('COCONUT_COUPON',0)
-        orders = self.compute_orders_coconuts(state.order_depths)
+        orders = self.compute_orders_coconuts(state.order_depths, state.timestamp)
         result['COCONUT'] = orders['COCONUT']
         result['COCONUT_COUPON'] = orders['COCONUT_COUPON']
 

@@ -113,13 +113,65 @@ class Logger:
 
 logger = Logger()
 
+empty_dict = {'AMETHYSTS': 0, 'STARFRUIT': 0, 'ORCHIDS': 0, 'CHOCOLATE' : 0, 'STRAWBERRIES': 0, 'ROSES' : 0, 'GIFT_BASKET' : 0}
+
+
+def def_value():
+    return copy.deepcopy(empty_dict)
+
+INF = int(1e9)
+
 class Trader:
-    positions = {'AMETHYSTS': 0, 'STARFRUIT': 0, 'ORCHIDS': 0, 'CHOCOLATE' : 0, 'STRAWBERRIES': 0, 'ROSES' : 0, 'GIFT_BASKET' : 0}
-    position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20, 'ORCHIDS': 100, 'CHOCOLATE' : 250, 'STRAWBERRIES': 350, 'ROSES' : 60, 'GIFT_BASKET' : 60}
-    mid_price_log = {'STARFRUIT': [], 'ORCHIDS' : [], 'CHOCOLATE' : [], 'STRAWBERRIES': [], 'ROSES' : [], 'GIFT_BASKET' : []}
+    positions = {'AMETHYSTS': 0, 'STARFRUIT': 0, 'ORCHIDS': 0, 'CHOCOLATE' : 0, 'STRAWBERRIES': 0, 'ROSES' : 0, 'GIFT_BASKET' : 0, 'COCONUT': 0, 'COCONUT_COUPON': 0}
+    position_limit = {'AMETHYSTS': 20, 'STARFRUIT': 20, 'ORCHIDS': 100, 'CHOCOLATE' : 250, 'STRAWBERRIES': 350, 'ROSES' : 60, 'GIFT_BASKET' : 60, 'COCONUT': 300, 'COCONUT_COUPON': 600}
+    mid_price_log = {'STARFRUIT': [], 'ORCHIDS' : [], 'CHOCOLATE' : [], 'STRAWBERRIES': [], 'ROSES' : [], 'GIFT_BASKET' : [], 'COCONUT': [], 'COCONUT_COUPON': []}
     price_log = {'STARFRUIT':[], 'ORCHIDS' : []}
     orchids_stats = {'SUNLIGHT' : [], 'HUMIDITY': [], 'EXPORT TARIFFS': [], 'IMPORT TARIFFS': [], 'SHIPPING COSTS': []}
     trending = {'SUNLIGHT' : 0, 'HUMIDITY' : 0}
+
+
+    position = copy.deepcopy(empty_dict)
+    POSITION_LIMIT = {'AMETHYSTS': 20, 'STARFRUIT': 20, 'ORCHIDS': 100, 'CHOCOLATE' : 250, 'STRAWBERRIES': 350, 'ROSES' : 60, 'GIFT_BASKET' : 60, 'COCONUT': 300, 'COCONUT_COUPON': 600}
+    volume_traded = copy.deepcopy(empty_dict)
+
+    person_position = collections.defaultdict(def_value)
+    person_actvalof_position = collections.defaultdict(def_value)
+
+    cpnl = collections.defaultdict(lambda : 0)
+    bananas_cache = []
+    coconuts_cache = []
+    bananas_dim = 4
+    coconuts_dim = 3
+    steps = 0
+    last_dolphins = -1
+    buy_gear = False
+    sell_gear = False
+    buy_berries = False
+    sell_berries = False
+    close_berries = False
+    last_dg_price = 0
+    start_berries = 0
+    first_berries = 0
+    cont_buy_basket_unfill = 0
+    cont_sell_basket_unfill = 0
+    implied_vol = 0
+    
+    halflife_diff = 5
+    alpha_diff = 1 - np.exp(-np.log(2)/halflife_diff)
+
+    halflife_price = 5
+    alpha_price = 1 - np.exp(-np.log(2)/halflife_price)
+
+    halflife_price_dip = 20
+    alpha_price_dip = 1 - np.exp(-np.log(2)/halflife_price_dip)
+    
+    begin_diff_dip = -INF
+    begin_diff_bag = -INF
+    begin_bag_price = -INF
+    begin_dip_price = -INF
+
+    std = 25
+    basket_std = 103
     
     def moving_average(self, item, period):
         '''
@@ -184,6 +236,228 @@ class Trader:
     #         self.trending = -1
     #     else:
     #         self.trending = 0
+
+    # def implied_volatility(self, S, K, T, r, option_price, option_type, sigma_initial=0.2, tolerance=1e-6, max_iterations=100):
+    #     """
+    #     Calculate implied volatility using Newton-Raphson method.
+    #     """
+    #     sigma = sigma_initial
+    #     for i in range(max_iterations):
+    #         price = self.black_scholes(S, K, T, r, sigma, option_type)
+    #         vega = self.vega_black_scholes(S, K, T, r, sigma, option_type)
+    #         sigma_new = sigma - (price - option_price) / vega
+            
+    #         if abs(sigma_new - sigma) < tolerance:
+    #             return sigma_new
+            
+    #         sigma = sigma_new
+        
+    #     raise ValueError("Failed to converge after maximum iterations")
+
+    # def vega_black_scholes(self, S, K, T, r, sigma, option_type):
+    #     """
+    #     Calculate Vega for the Black-Scholes formula.
+    #     """
+    #     d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    #     vega = S * np.sqrt(T) * math.exp(-0.5 * d1 ** 2) / np.sqrt(2 * np.pi)
+        
+    #     if option_type == 'put':
+    #         vega = -vega
+        
+    #     return vega
+    
+    # def black_scholes(self, S, K, T, r, sigma, option_type):
+    #     """
+    #     Calculate option price using Black-Scholes model.
+    #     """
+    #     d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    #     d2 = d1 - sigma * np.sqrt(T)
+        
+    #     if option_type == 'call':
+    #         N_d1 = 0.5 * (1 + math.erf(d1 / np.sqrt(2)))
+    #         N_d2 = 0.5 * (1 + math.erf(d2 / np.sqrt(2)))
+    #         option_price = S * N_d1 - K * np.exp(-r * T) * N_d2
+    #     elif option_type == 'put':
+    #         N_d1 = 0.5 * (1 - math.erf(d1 / np.sqrt(2)))
+    #         N_d2 = 0.5 * (1 - math.erf(d2 / np.sqrt(2)))
+    #         option_price = K * np.exp(-r * T) * N_d2 - S * N_d1
+    #     else:
+    #         raise ValueError("Option type must be 'call' or 'put'")
+        
+    #     return option_price
+
+    def compute_orders_coconuts(self, order_depth, timestamp):
+        orders = {'COCONUT': [], 'COCONUT_COUPON': []} 
+        coupon_asks = list(order_depth['COCONUT_COUPON'].sell_orders.items())
+        coupon_bids = list(order_depth['COCONUT_COUPON'].buy_orders.items())
+        coconut_asks = list(order_depth['COCONUT'].sell_orders.items())
+        coconut_bids = list(order_depth['COCONUT'].buy_orders.items())
+        
+        stock_price = (coconut_asks[0][0] + coconut_bids[0][0])/2
+        strike_price = 10000 #price the call option can be executed at
+        time_to_expiration = (249 - timestamp/1000000)/365 #time till expiration in years
+        risk_free_rate = 0 #no banks on the island
+        sigma = 0.19332951334290546 #calculated using premium on day 1 timestamp 1, might need to check this
+        
+        fair_price = self.black_scholes_price(stock_price,strike_price,time_to_expiration, risk_free_rate,sigma)
+        logger.print(fair_price)
+        bought_amount = 0
+        sold_amount = 0
+        
+        if len(coupon_asks) != 0:
+            if fair_price > coupon_asks[0][0]:
+                ask_price, ask_volume = coupon_asks[0]
+                if self.positions['COCONUT_COUPON'] < self.position_limit['COCONUT_COUPON']:
+                    buy_amount = min(self.position_limit['COCONUT_COUPON'] - self.positions['COCONUT_COUPON'],-ask_volume)
+                    orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON',ask_price, buy_amount))
+                    self.positions['COCONUT_COUPON'] += buy_amount
+                    bought_amount += buy_amount
+
+        if len(coupon_bids) != 0:
+            if fair_price < coupon_bids[0][0]:
+                bid_price, bid_volume = coupon_bids[0]
+                if self.positions['COCONUT_COUPON'] > -self.position_limit['COCONUT_COUPON']:
+                    sell_amount = min(self.positions['COCONUT_COUPON'] + self.position_limit['COCONUT_COUPON'], bid_volume)
+                    logger.print("SELL", str(sell_amount) + "x", bid_price)
+                    orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON',bid_price,-sell_amount))
+                    self.positions['COCONUT_COUPON'] -= sell_amount
+                    sold_amount -= sell_amount
+        
+        #can try market making, not sure if bots will take, spread is also very small, nearly 0
+                
+        return orders    
+        
+    
+    def black_scholes_price(self,S,K,T,r,sigma):
+        d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+        d2 = d1 - sigma * np.sqrt(T)
+        call_price = S * self.phi(d1) - K * np.exp(-r * T) * self.phi(d2)
+        return call_price
+    def phi(self,x):
+    #'Cumulative distribution function for the standard normal distribution'
+        return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0    
+ 
+    def get_mid_price(self,order_depth):
+        buy_orders = list(order_depth.buy_orders.items())
+        buy_orders.sort(key = lambda x:x[0], reverse = True)
+        sell_orders = list(order_depth.sell_orders.items())
+        sell_orders.sort(key = lambda x: x[0])
+        best_bid, best_bid_amount = buy_orders[0]
+        best_ask, best_ask_amount = sell_orders[0]
+        return (best_bid + best_ask) /2
+
+    def compute_orders_basket2(self, order_depth):
+
+        orders = {'CHOCOLATE' : [], 'STRAWBERRIES': [], 'ROSES' : [], 'GIFT_BASKET' : []}
+        prods = ['CHOCOLATE', 'STRAWBERRIES', 'ROSES', 'GIFT_BASKET']
+        osell, obuy, best_sell, best_buy, worst_sell, worst_buy, mid_price, vol_buy, vol_sell = {}, {}, {}, {}, {}, {}, {}, {}, {}
+        coeffs = {'CHOCOLATE' : 0.1118, 'STRAWBERRIES': 0.0533, 'ROSES' : 0.207, 'GIFT_BASKET' : 1}
+        comp = {'CHOCOLATE' : 4, 'STRAWBERRIES': 6, 'ROSES' : 1, 'GIFT_BASKET' : 1}
+
+        for p in prods:
+            osell[p] = collections.OrderedDict(sorted(order_depth[p].sell_orders.items()))
+            obuy[p] = collections.OrderedDict(sorted(order_depth[p].buy_orders.items(), reverse=True))
+
+            best_sell[p] = next(iter(osell[p])) #lowest bot sell price (lowest price we can buy)
+            best_buy[p] = next(iter(obuy[p]))# highed bot buy offers (highest price we can sell at)
+
+            worst_sell[p] = next(reversed(osell[p]))# highest bots sell order
+            worst_buy[p] = next(reversed(obuy[p]))# lowest bot buy offer (lowest price we can sell at)
+
+            mid_price[p] = (best_sell[p] + best_buy[p])/2
+            self.mid_price_log[p].append(mid_price[p])
+            # mid_price[p] = self.calculate_weighted_price(order_depth[p])
+            # vol_buy[p], vol_sell[p] = 0, 0
+            # for price, vol in obuy[p].items():
+            #     vol_buy[p] += vol 
+            #     if vol_buy[p] >= self.POSITION_LIMIT[p]/10:
+            #         break
+            # for price, vol in osell[p].items():
+            #     vol_sell[p] += -vol 
+            #     if vol_sell[p] >= self.POSITION_LIMIT[p]/10:
+            #         break
+
+        res_buy = mid_price['GIFT_BASKET'] - mid_price['CHOCOLATE']*4 - mid_price['STRAWBERRIES']*6 - mid_price['ROSES'] - 375
+        res_sell = mid_price['GIFT_BASKET'] - mid_price['CHOCOLATE']*4 - mid_price['STRAWBERRIES']*6 - mid_price['ROSES'] - 375
+
+        trade_at = self.basket_std*0.5
+        # close_at = self.basket_std*(-1000)
+
+        # pb_pos = self.position['GIFT_BASKET']
+        # pb_neg = self.position['GIFT_BASKET']
+
+        # uku_pos = self.position['ROSES']
+        # uku_neg = self.position['ROSES']
+
+
+        # basket_buy_sig = 0
+        # basket_sell_sig = 0
+
+        # if self.position['GIFT_BASKET'] == self.POSITION_LIMIT['GIFT_BASKET']:
+        #     self.cont_buy_basket_unfill = 0
+        # if self.position['GIFT_BASKET'] == -self.POSITION_LIMIT['GIFT_BASKET']:
+        #     self.cont_sell_basket_unfill = 0
+
+        do_bask = 0
+        # self.calculate_weighted_price(order_depth)
+
+        if res_sell > trade_at: #sell high
+            vol = self.position['GIFT_BASKET'] + self.POSITION_LIMIT['GIFT_BASKET']
+            # self.position['GIFT_BASKET'] -= int(vol/10)
+            # self.cont_buy_basket_unfill = 0 # no need to buy rn
+            # assert(vol >= 0)
+            if vol > 0:
+                # do_bask = 1
+                # basket_sell_sig = 1
+                orders['GIFT_BASKET'].append(Order('GIFT_BASKET', worst_buy['GIFT_BASKET'], -int(vol/15)))
+                # orders['CHOCOLATE'].append(Order('CHOCOLATE', worst_sell['CHOCOLATE'], 4*int(vol/15))) 
+                # orders['STRAWBERRIES'].append(Order('STRAWBERRIES', worst_sell['STRAWBERRIES'], 6*int(vol/15))) 
+                # orders['ROSES'].append(Order('ROSES', worst_sell['ROSES'], int(vol/15)))
+    
+                # self.cont_sell_basket_unfill += 2
+                #pb_neg -= vol
+                #uku_pos += vol
+        elif res_buy < -trade_at:
+            vol = self.POSITION_LIMIT['GIFT_BASKET'] - self.position['GIFT_BASKET']
+            # print('gift')
+            # print(self.postio)
+            # self.position['GIFT_BASKET'] += int(vol/10)
+            # self.cont_sell_basket_unfill = 0 # no need to sell rn
+            # assert(vol >= 0)
+            if vol > 0:
+                # do_bask = 1
+                # basket_buy_sig = 1
+                orders['GIFT_BASKET'].append(Order('GIFT_BASKET', worst_sell['GIFT_BASKET'], int(vol/15)))
+                # orders['CHOCOLATE'].append(Order('CHOCOLATE', worst_buy['CHOCOLATE'], -4*int(vol/15))) 
+                # orders['STRAWBERRIES'].append(Order('STRAWBERRIES', worst_buy['STRAWBERRIES'], -6*int(vol/15))) 
+                # orders['ROSES'].append(Order('ROSES', worst_buy['ROSES'], -int(vol/15)))
+                
+                # self.cont_buy_basket_unfill += 2
+                #pb_pos += vol
+        if(len(self.mid_price_log['GIFT_BASKET'])) >= 500:
+            for product in prods:
+                if product != 'GIFT_BASKET':
+                    expected_price = coeffs[product]*(mid_price['GIFT_BASKET']-375)
+                    cof = sum(self.mid_price_log[product])/len(self.mid_price_log[product])
+                    g_cof = (sum(self.mid_price_log['GIFT_BASKET']) - 375*len(self.mid_price_log['GIFT_BASKET']))/len(self.mid_price_log['GIFT_BASKET'])
+                    expected_price = (cof/g_cof)*(mid_price['GIFT_BASKET']-375)
+                    if mid_price[product] < expected_price*0.985:
+                        vol = 2*self.POSITION_LIMIT[product]
+                        orders[product].append(Order(product, worst_sell[product], comp[product]*int(vol/15)))
+            for product in prods:
+                if product != 'GIFT_BASKET':
+                    expected_price = coeffs[product]*(mid_price['GIFT_BASKET']-375)
+                    cof = sum(self.mid_price_log[product])/len(self.mid_price_log[product])
+                    g_cof = (sum(self.mid_price_log['GIFT_BASKET']) - 375*len(self.mid_price_log['GIFT_BASKET']))/len(self.mid_price_log['GIFT_BASKET'])
+                    expected_price = (cof/g_cof)*(mid_price['GIFT_BASKET']-375)
+                    print('ex price')
+                    print(expected_price)
+                    if mid_price[product] > expected_price*1.015:
+                        vol = 2*self.POSITION_LIMIT[product]
+                        orders[product].append(Order(product, worst_buy[product], -comp[product]*int(vol/15)))
+
+
+        return orders
 
     def determine_trend(self, value, datapts, period):
         """
@@ -435,11 +709,14 @@ class Trader:
                 #if best_ask - best_bid < 7:
                     #orders.append(Order(product,best_bid+1, -100))
                 #else:
-                if best_bid+2 > import_price:
-                    orders.append(Order(product,best_bid+2, -100))
-                    if state.timestamp > 0:
-                        conversions = -self.positions['ORCHIDS']
-                result[product] = orders 
+                if best_bid + 2 < import_price:
+                    acc_price = round(import_price + 1)
+                else:
+                    acc_price = best_bid + 2
+                orders.append(Order(product,acc_price, -100))
+                if state.timestamp > 0:
+                    conversions = -self.positions['ORCHIDS']
+                result[product] = orders
                 # orders: list[Order] = []
                 # order_depth = state.order_depths['ORCHIDS']
                 # self.positions['ORCHIDS'] = state.position.get(product,0)
@@ -500,14 +777,24 @@ class Trader:
                 # # self.determine_trend('SUNLIGHT', self.orchids_stats['SUNLIGHT'], 10)
 
                 # result[product] = orders
+
+        self.positions['COCONUT'] = state.position.get('COCONUT',0)
+        self.positions['COCONUT_COUPON'] = state.position.get('COCONUT_COUPON',0)
+        orders = self.compute_orders_coconuts(state.order_depths, state.timestamp)
+        result['COCONUT'] = orders['COCONUT']
+        result['COCONUT_COUPON'] = orders['COCONUT_COUPON']
+
+        # products = ['CHOCOLATE', 'STRAWBERRIES', 'ROSES', 'GIFT_BASKET']
+        # for product in products:
+        #     self.positions[product] = state.position.get(product,0)
         
-        orders = self.compute_orders_basket(state.order_depths)
-        if len(orders['GIFT_BASKET']) != 0:
-            print('bert3')
-            result['GIFT_BASKET'] = orders['GIFT_BASKET']
-        result['CHOCOLATE'] = orders['CHOCOLATE']
-        result['STRAWBERRIES'] = orders['STRAWBERRIES']
-        result['ROSES'] = orders['ROSES']
+        # orders = self.compute_orders_basket2(state.order_depths)
+        # if len(orders['GIFT_BASKET']) != 0:
+        #     print('bert3')
+        #     result['GIFT_BASKET'] = orders['GIFT_BASKET']
+        # result['CHOCOLATE'] = orders['CHOCOLATE']
+        # result['STRAWBERRIES'] = orders['STRAWBERRIES']
+        # result['ROSES'] = orders['ROSES']
 
                      
         traderData = "SAMPLE" # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
