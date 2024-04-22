@@ -155,6 +155,7 @@ class Trader:
     cont_buy_basket_unfill = 0
     cont_sell_basket_unfill = 0
     implied_vol = 0
+    last_hedging_time = 0
     
     halflife_diff = 5
     alpha_diff = 1 - np.exp(-np.log(2)/halflife_diff)
@@ -172,6 +173,8 @@ class Trader:
 
     std = 25
     basket_std = 103
+
+    sigma_cache = []
     
     def moving_average(self, item, period):
         '''
@@ -237,56 +240,55 @@ class Trader:
     #     else:
     #         self.trending = 0
 
-    # def implied_volatility(self, S, K, T, r, option_price, option_type, sigma_initial=0.2, tolerance=1e-6, max_iterations=100):
-    #     """
-    #     Calculate implied volatility using Newton-Raphson method.
-    #     """
-    #     sigma = sigma_initial
-    #     for i in range(max_iterations):
-    #         price = self.black_scholes(S, K, T, r, sigma, option_type)
-    #         vega = self.vega_black_scholes(S, K, T, r, sigma, option_type)
-    #         sigma_new = sigma - (price - option_price) / vega
+    def implied_volatility(self, S, K, T, r, option_price, option_type, sigma_initial=0.19332951334290546, tolerance=1e-6, max_iterations=100):
+        """
+        Calculate implied volatility using Newton-Raphson method with improved stability.
+        """
+        sigma = sigma_initial
+        for i in range(max_iterations):
+            price = self.black_scholes(S, K, T, r, sigma, option_type)
+            vega = self.vega_black_scholes(S, K, T, r, sigma)
             
-    #         if abs(sigma_new - sigma) < tolerance:
-    #             return sigma_new
+            # Check if Vega is near zero, adjust sigma slowly if so
+            if abs(vega) < 1e-10:
+                sigma += 0.0001 if price < option_price else -0.0001
+            else:
+                sigma_new = sigma - (price - option_price) / vega
+                # Limit the adjustment to prevent excessive changes
+                sigma = max(sigma * 0.9, min(sigma_new, sigma * 1.1))
             
-    #         sigma = sigma_new
-        
-    #     raise ValueError("Failed to converge after maximum iterations")
+            if abs(sigma_new - sigma) < tolerance:
+                return sigma
 
-    # def vega_black_scholes(self, S, K, T, r, sigma, option_type):
-    #     """
-    #     Calculate Vega for the Black-Scholes formula.
-    #     """
-    #     d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
-    #     vega = S * np.sqrt(T) * math.exp(-0.5 * d1 ** 2) / np.sqrt(2 * np.pi)
-        
-    #     if option_type == 'put':
-    #         vega = -vega
-        
-    #     return vega
-    
-    # def black_scholes(self, S, K, T, r, sigma, option_type):
-    #     """
-    #     Calculate option price using Black-Scholes model.
-    #     """
-    #     d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
-    #     d2 = d1 - sigma * np.sqrt(T)
-        
-    #     if option_type == 'call':
-    #         N_d1 = 0.5 * (1 + math.erf(d1 / np.sqrt(2)))
-    #         N_d2 = 0.5 * (1 + math.erf(d2 / np.sqrt(2)))
-    #         option_price = S * N_d1 - K * np.exp(-r * T) * N_d2
-    #     elif option_type == 'put':
-    #         N_d1 = 0.5 * (1 - math.erf(d1 / np.sqrt(2)))
-    #         N_d2 = 0.5 * (1 - math.erf(d2 / np.sqrt(2)))
-    #         option_price = K * np.exp(-r * T) * N_d2 - S * N_d1
-    #     else:
-    #         raise ValueError("Option type must be 'call' or 'put'")
-        
-    #     return option_price
+        raise ValueError("Failed to converge after maximum iterations")
 
-    def compute_orders_coconuts(self, order_depth, timestamp, hedging_interval=10):
+    def vega_black_scholes(self, S, K, T, r, sigma):
+        """
+        Calculate Vega for the Black-Scholes formula.
+        """
+        d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+        vega = S * np.sqrt(T) * math.exp(-0.5 * d1 ** 2) / np.sqrt(2 * np.pi)
+        return vega
+
+    def black_scholes(self, S, K, T, r, sigma, option_type):
+        """
+        Calculate option price using Black-Scholes model, including both call and put types.
+        """
+        d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+        d2 = d1 - sigma * np.sqrt(T)
+        N_d1 = self.phi(d1)
+        N_d2 = self.phi(d2)
+        
+        if option_type == 'call':
+            option_price = S * N_d1 - K * np.exp(-r * T) * N_d2
+        elif option_type == 'put':
+            option_price = K * np.exp(-r * T) * (1 - N_d2) - S * (1 - N_d1)
+        else:
+            raise ValueError("Option type must be 'call' or 'put'")
+        
+        return option_price
+
+    def compute_orders_coconuts(self, order_depth, timestamp, hedging_interval=1):
         orders = {'COCONUT': [], 'COCONUT_COUPON': []}
 
         coupon_asks = list(order_depth['COCONUT_COUPON'].sell_orders.items())
@@ -295,10 +297,21 @@ class Trader:
         coconut_bids = list(order_depth['COCONUT'].buy_orders.items())
 
         stock_price = (coconut_asks[0][0] + coconut_bids[0][0]) / 2
+        observed_option_price = 0
+        if(len(coupon_asks) != 0 and len(coupon_bids) != 0):
+            observed_option_price = (coupon_asks[0][0] + coupon_bids[0][0]) /2
         strike_price = 10000
         time_to_expiration = (249 - timestamp / 1000000) / 365
         risk_free_rate = 0
         sigma = 0.19332951334290546
+
+        # sigma = self.implied_volatility(stock_price, strike_price, time_to_expiration, risk_free_rate, observed_option_price, 'call')
+        # print(sigma)
+
+        # self.sigma_cache.append(sigma)
+        # period = 4
+        # if len(self.sigma_cache) >= period:
+        #     sigma = sum(self.sigma_cache[-period:])/period
 
         fair_price_coupon = self.black_scholes_price(stock_price, strike_price, time_to_expiration, risk_free_rate, sigma)
         delta = self.delta_black_scholes(stock_price, strike_price, time_to_expiration, risk_free_rate, sigma)
@@ -323,6 +336,40 @@ class Trader:
                     self.positions['COCONUT_COUPON'] += buy_amount
                     bought_amount_coupon += buy_amount
 
+                    if timestamp % (hedging_interval * 100) == 0:
+                        hedge_amount_delta = -delta * buy_amount
+                        hedge_amount_gamma = -gamma * buy_amount / 2
+
+                        if hedge_amount_delta > 0:
+                            if len(coconut_bids) != 0:
+                                bid_price, bid_volume = coconut_bids[0]
+                                hedge_trade_delta = min(hedge_amount_delta, bid_volume)
+                                orders['COCONUT'].append(Order('COCONUT', bid_price, hedge_trade_delta))
+                                self.positions['COCONUT'] += hedge_trade_delta
+                                bought_amount_coconut += hedge_trade_delta
+                        else:
+                            if len(coconut_asks) != 0:
+                                ask_price, ask_volume = coconut_asks[0]
+                                hedge_trade_delta = min(-hedge_amount_delta, -ask_volume)
+                                orders['COCONUT'].append(Order('COCONUT', ask_price, -hedge_trade_delta))
+                                self.positions['COCONUT'] -= hedge_trade_delta
+                                sold_amount_coconut -= hedge_trade_delta
+
+                        if hedge_amount_gamma > 0:
+                            if len(coconut_bids) != 0:
+                                bid_price, bid_volume = coconut_bids[0]
+                                hedge_trade_gamma = min(hedge_amount_gamma, bid_volume)
+                                orders['COCONUT'].append(Order('COCONUT', bid_price, hedge_trade_gamma))
+                                self.positions['COCONUT'] += hedge_trade_gamma
+                                bought_amount_coconut += hedge_trade_gamma
+                        else:
+                            if len(coconut_asks) != 0:
+                                ask_price, ask_volume = coconut_asks[0]
+                                hedge_trade_gamma = min(-hedge_amount_gamma, -ask_volume)
+                                orders['COCONUT'].append(Order('COCONUT', ask_price, -hedge_trade_gamma))
+                                self.positions['COCONUT'] -= hedge_trade_gamma
+                                sold_amount_coconut -= hedge_trade_gamma
+
 
         if len(coupon_bids) != 0:
             if fair_price_coupon < coupon_bids[0][0]:
@@ -334,11 +381,40 @@ class Trader:
                     self.positions['COCONUT_COUPON'] -= sell_amount
                     sold_amount_coupon -= sell_amount
 
-        # Continuous hedging and trading logic
-        time_since_last_hedge = timestamp - self.last_hedging_time
-        if time_since_last_hedge >= hedging_interval:
-            self.last_hedging_time = timestamp
-            hedge_coconuts(stock_price, delta, coconut_asks, coconut_bids, orders)
+                    # Hedge the delta and gamma exposure by trading COCONUT
+                    if timestamp % (hedging_interval * 100) == 0:
+                        hedge_amount_delta = delta * sell_amount
+                        hedge_amount_gamma = gamma * sell_amount / 2
+
+                        if hedge_amount_delta > 0:
+                            if len(coconut_bids) != 0:
+                                bid_price, bid_volume = coconut_bids[0]
+                                hedge_trade_delta = min(hedge_amount_delta, bid_volume)
+                                orders['COCONUT'].append(Order('COCONUT', bid_price, hedge_trade_delta))
+                                self.positions['COCONUT'] += hedge_trade_delta
+                                bought_amount_coconut += hedge_trade_delta
+                        else:
+                            if len(coconut_asks) != 0:
+                                ask_price, ask_volume = coconut_asks[0]
+                                hedge_trade_delta = min(-hedge_amount_delta, -ask_volume)
+                                orders['COCONUT'].append(Order('COCONUT', ask_price, -hedge_trade_delta))
+                                self.positions['COCONUT'] -= hedge_trade_delta
+                                sold_amount_coconut -= hedge_trade_delta
+
+                        if hedge_amount_gamma > 0:
+                            if len(coconut_bids) != 0:
+                                bid_price, bid_volume = coconut_bids[0]
+                                hedge_trade_gamma = min(hedge_amount_gamma, bid_volume)
+                                orders['COCONUT'].append(Order('COCONUT', bid_price, hedge_trade_gamma))
+                                self.positions['COCONUT'] += hedge_trade_gamma
+                                bought_amount_coconut += hedge_trade_gamma
+                        else:
+                            if len(coconut_asks) != 0:
+                                ask_price, ask_volume = coconut_asks[0]
+                                hedge_trade_gamma = min(-hedge_amount_gamma, -ask_volume)
+                                orders['COCONUT'].append(Order('COCONUT', ask_price, -hedge_trade_gamma))
+                                self.positions['COCONUT'] -= hedge_trade_gamma
+                                sold_amount_coconut -= hedge_trade_gamma
         
 
         # # Delta hedging for COCONUT
@@ -384,6 +460,7 @@ class Trader:
         d2 = d1 - sigma * np.sqrt(T)
         call_price = S * self.phi(d1) - K * np.exp(-r * T) * self.phi(d2)
         return call_price
+    
     def phi(self,x):
     #'Cumulative distribution function for the standard normal distribution'
         return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0    
