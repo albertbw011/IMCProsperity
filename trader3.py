@@ -317,7 +317,7 @@ class Trader:
         # coupon_asks = {200: 180, 250: 120}
 
         # Trading algorithm
-        implied_vol = self.implied_volatility(coconut_price, strike_price, time_to_maturity, risk_free_rate, self.mid_price_log['COCONUT_COUPON'][-1], 'call')
+        implied_vol = self.implied_volatility(coconut_price, strike_price, time_to_maturity, risk_free_rate, 637.63, 'call')
         self.implied_vol = implied_vol
 
         # implied_vol = 0.166
