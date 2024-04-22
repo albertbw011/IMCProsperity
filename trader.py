@@ -119,6 +119,7 @@ class Trader:
     starfruit_mid_price_log = {'STARFRUIT': []}
     starfruit_price_log = {'STARFRUIT':[]}
     baskets_mp = {'GB' : [],'CHOC' :[], 'STRAW': [], 'ROSE': [], 'SUM': []}
+    basket_price_log = {'COMBINED': [], 'BASKET': [], 'DELTA': []}
     
     def moving_average(self, item, period):
         '''
@@ -144,9 +145,15 @@ class Trader:
     def MA_baskets(self,period,product):
         total_sum = sum(self.baskets_mp[product][-period:])
         return total_sum/period
+    
+    def moving_average_list(self, item, period):
+        if len(item) >= period:
+            prices = item[-period:]
+            sum_prices = sum(prices)
+            return sum_prices / period    
         
     def compute_order_coconuts(self, order_depth, timestamp):
-        orders = []
+        orders = {'COCONUT': [], 'COCONUT_COUPON': []}
         coupon_asks = list(order_depth['COCONUT_COUPON'].sell_orders.items())
         coupon_bids = list(order_depth['COCONUT_COUPON'].buy_orders.items())
         coconut_asks = list(order_depth['COCONUT'].sell_orders.items())
@@ -154,7 +161,7 @@ class Trader:
         
         stock_price = (coconut_asks[0][0] + coconut_bids[0][0])/2
         strike_price = 10000 #price the call option can be executed at
-        time_to_expiration = (249 - timestamp/1000000)/365 #time till expiration in years
+        time_to_expiration = (247 - timestamp/1000000)/365 #time till expiration in years
         risk_free_rate = 0 #no banks on the island
         sigma = 0.19332951334290546 #calculated using premium on day 1 timestamp 1, might need to check this
         
@@ -168,7 +175,7 @@ class Trader:
                 ask_price, ask_volume = coupon_asks[0]
                 if self.positions['COCONUT_COUPON'] < self.position_limit['COCONUT_COUPON']:
                     buy_amount = min(self.position_limit['COCONUT_COUPON'] - self.positions['COCONUT_COUPON'],-ask_volume)
-                    orders.append(Order('COCONUT_COUPON',ask_price, buy_amount))
+                    orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON',ask_price, buy_amount))
                     self.positions['COCONUT_COUPON'] += buy_amount
                     bought_amount += buy_amount
 
@@ -178,24 +185,113 @@ class Trader:
                 if self.positions['COCONUT_COUPON'] > -self.position_limit['COCONUT_COUPON']:
                     sell_amount = min(self.positions['COCONUT_COUPON'] + self.position_limit['COCONUT_COUPON'], bid_volume)
                     logger.print("SELL", str(sell_amount) + "x", bid_price)
-                    orders.append(Order('COCONUT_COUPON',bid_price,-sell_amount))
+                    orders['COCONUT_COUPON'].append(Order('COCONUT_COUPON',bid_price,-sell_amount))
                     self.positions['COCONUT_COUPON'] -= sell_amount
                     sold_amount -= sell_amount
         
         #can try market making, not sure if bots will take, spread is also very small, nearly 0
+        delta = self.delta(stock_price,strike_price,time_to_expiration, risk_free_rate,sigma) * self.positions['COCONUT_COUPON'] + self.positions['COCONUT']
+        value = 200
+        if delta > value:
+            bid_price, bid_volume = coconut_bids[0]
+            sell_amount = min(int(delta - value), bid_volume)
+            orders['COCONUT'].append(Order('COCONUT',bid_price, -sell_amount))
+        if delta < -value:
+            ask_price, ask_volume = coconut_asks[0]
+            buy_amount = min(int(-value - delta),-ask_volume)
+            orders['COCONUT'].append(Order('COCONUT',ask_price, buy_amount))
+        
+        
                 
         return orders    
         
+    def no_positions_basket(self, positions):
+        return positions['CHOCOLATE'] == positions['ROSES'] == positions['STRAWBERRIES'] == 0
+    
+    def calculate_basket(self, state):
+        order_depth = state.order_depths
+        chocolate = "CHOCOLATE"
+        strawberries = "STRAWBERRIES"
+        roses = "ROSES"
+        gift_basket = "GIFT_BASKET"
+        etf_premium = 386
+        threshold = 38
+        orders = {
+            chocolate: [],
+            strawberries: [],
+            roses: [],
+            gift_basket: []
+        }
+
+        prices = {
+            chocolate: self.calculate_weighted_price(order_depth[chocolate]),
+            strawberries: self.calculate_weighted_price(order_depth[strawberries]),
+            roses: self.calculate_weighted_price(order_depth[roses]),
+            gift_basket: self.calculate_weighted_price(order_depth[gift_basket])
+        }
+
+        zero = 0
+        best_ask_chocolate, best_ask_amount_chocolate = list(order_depth[chocolate].sell_orders.items())[zero]
+        best_ask_strawberries, best_ask_amount_strawberries = list(order_depth[strawberries].sell_orders.items())[zero]
+        best_ask_roses, best_ask_amount_roses = list(order_depth[roses].sell_orders.items())[zero]
+        best_ask_gift, best_ask_amount_gift = list(order_depth[gift_basket].sell_orders.items())[zero]
+        best_bid_chocolate, best_bid_amount_chocolate = list(order_depth[chocolate].buy_orders.items())[zero]
+        best_bid_strawberries, best_bid_amount_strawberries = list(order_depth[strawberries].buy_orders.items())[zero]
+        best_bid_roses, best_bid_amount_roses = list(order_depth[roses].buy_orders.items())[zero]
+        best_bid_gift, best_bid_amount_gift = list(order_depth[gift_basket].buy_orders.items())[zero]
+
+        combined_price = 4*prices[chocolate] + 6*prices[strawberries] + prices[roses]
+        price_diff = prices[gift_basket] - combined_price
+        self.basket_price_log['COMBINED'].append(combined_price)
+        self.basket_price_log['BASKET'].append(prices[gift_basket])
+        self.basket_price_log['DELTA'].append(price_diff)
+        self.positions[chocolate] = state.position.get(chocolate, 0)
+        self.positions[strawberries] = state.position.get(strawberries, 0)
+        self.positions[roses] = state.position.get(roses, 0)
+        self.positions[gift_basket] = state.position.get(gift_basket, 0)
+        period = 2
+        
+        if len(self.basket_price_log['BASKET']) >= period:
+            delta_curr = self.moving_average_list(self.basket_price_log['DELTA'], period)
+                # if the etf prices exceeds the price of the individual products + the difference, then we short the products and long the etf
+            if delta_curr < etf_premium - threshold:
+                # should be positive
+                units = min(best_bid_amount_chocolate//4, best_bid_amount_strawberries//6, best_bid_amount_roses, -best_ask_amount_gift)
+                # long etf
+                orders[gift_basket].append(Order(gift_basket, best_ask_gift, units))
+            elif delta_curr > etf_premium + threshold:
+                # positive
+                units = min(-best_ask_amount_chocolate//4, -best_ask_amount_strawberries//6, -best_ask_amount_roses, best_bid_amount_gift)
+                # short etf
+                orders[gift_basket].append(Order(gift_basket, best_bid_gift, -units))
+
+        else:
+            if self.basket_price_log['DELTA'][-1] < etf_premium - threshold:
+                # positive
+                units = min(best_bid_amount_chocolate//4, best_bid_amount_strawberries//6, best_bid_amount_roses, -best_ask_amount_gift)
+                # long etf
+                orders[gift_basket].append(Order(gift_basket, best_ask_gift, units))
+            elif self.basket_price_log['DELTA'][-1] > etf_premium + threshold:
+                # positive
+                units = min(-best_ask_amount_chocolate//4, -best_ask_amount_strawberries//6, -best_ask_amount_roses, best_bid_amount_gift)
+                # short etf
+                orders[gift_basket].append(Order(gift_basket, best_bid_gift, -units))
+
+        return orders
     
     def black_scholes_price(self,S,K,T,r,sigma):
         d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
         d2 = d1 - sigma * np.sqrt(T)
         call_price = S * self.phi(d1) - K * np.exp(-r * T) * self.phi(d2)
         return call_price
+    
     def phi(self,x):
     #'Cumulative distribution function for the standard normal distribution'
-        return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0    
-        
+        return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0
+    
+    def delta(self,S,K,T,r,sigma):
+        d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+        return self.phi(d1)
     
     def calculate_weighted_price(self, order_depth):
         weighted_bid = 0
@@ -209,31 +305,6 @@ class Trader:
             total_volume -= volume
         return (weighted_bid + weighted_ask) / total_volume
     
-    def compute_gift_basket_orders(self,product, state,timestamp):
-        gb_od = state.order_depths['GIFT_BASKET']
-        choc_od = state.order_depths['CHOCOLATE']
-        straw_od = state.order_depths['STRAWBERRIES']
-        rose_od = state.order_depths['ROSES']
-        flag = 0
-        self.baskets_mp['GB'].append(self.get_mid_price(gb_od))
-        self.baskets_mp['CHOC'].append(self.get_mid_price(choc_od))
-        self.baskets_mp['STRAW'].append(self.get_mid_price(straw_od))
-        self.baskets_mp['ROSE'].append(self.get_mid_price(rose_od))
-        self.baskets_mp['SUM'].append(4* self.get_mid_price(choc_od) + 6*self.get_mid_price(straw_od) + self.get_mid_price(rose_od))
-        if timestamp > 500:
-            MA_3 = self.MA_baskets(3, 'SUM')
-            MA_5 = self.MA_baskets(5, 'SUM')
-            logger.print(MA_3)
-            logger.print(MA_5)
-            if MA_3 > MA_5:
-                flag = -1 #buy gb
-            if  MA_3 < MA_5:
-                flag = 1 #sell gb
-        return flag
-        
-            
-        
-        
         
         
     def get_mid_price(self,order_depth):
@@ -394,11 +465,18 @@ class Trader:
                 #order_depth = state.order_depths[product]
                 self.positions['COCONUT_COUPON'] = state.position.get('COCONUT_COUPON',0)
                 orders = self.compute_order_coconuts(state.order_depths,state.timestamp)
-                result[product] = orders
+                result[product] = orders['COCONUT_COUPON']
+            elif product == 'COCONUT':
+                orders: list[Order] = []
+                self.positions['COCONUT'] = state.position.get('COCONUT',0)
+                orders = self.compute_order_coconuts(state.order_depths,state.timestamp)
+                result[product] = orders['COCONUT']
                    
                 
                 
-                            
+        basket_orders = self.calculate_basket(state)
+        for product in basket_orders:
+            result[product] = basket_orders[product]                    
                      
         traderData = "SAMPLE" # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
         
