@@ -474,9 +474,9 @@ class Trader:
                    
                 
                 
-        basket_orders = self.calculate_basket(state)
+        """basket_orders = self.calculate_basket(state)
         for product in basket_orders:
-            result[product] = basket_orders[product]                    
+            result[product] = basket_orders[product]    """                
                      
         traderData = "SAMPLE" # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
         
